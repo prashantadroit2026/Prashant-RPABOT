@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Purchase Dashboard</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <style>
+    /* Integrated Neumorphic Soft UI Design System */
+    :root {
+      --primary: #f5c518;
+      --primary-hover: #e8b60f;
+      --primary-ink: #8a5f00;
+      --primary-soft: #fff7d6;
+      --success: #16a34a;
+      --success-dark: #15803d;
+      --success-soft: #dff3e6;
+      --danger: #dc2626;
+      --danger-dark: #b91c1c;
+      --danger-soft: #fbe3e3;
+      --warning: #f59e0b;
+      --warning-soft: #fdf0d4;
+      --bg: #f7f5ef;
+      --surface: #f7f5ef;
+      --surface-2: #f1eee5;
+      --border: #e2ddd0;
+      --border-strong: #d5cfbf;
+      --text: #2b2620;
+      --muted: #7a7164;
+      --gray-100: #edeae2;
+      --gray-700: #4c453b;
+      --radius: 14px;
+      --shadow-sm: 5px 5px 10px rgba(196, 190, 172, 0.50), -5px -5px 10px rgba(255, 255, 255, 0.95);
+      --shadow-md: 8px 8px 16px rgba(196, 190, 172, 0.55), -8px -8px 16px rgba(255, 255, 255, 0.98);
+      --shadow-lg: 12px 12px 28px rgba(196, 190, 172, 0.60), -12px -12px 28px rgba(255, 255, 255, 1.00);
+      --neu-inset: inset 3px 3px 7px rgba(196, 190, 172, 0.60), inset -3px -3px 7px rgba(255, 255, 255, 0.90);
+      --neu-pressed: inset 5px 5px 10px rgba(196, 190, 172, 0.65), inset -5px -5px 10px rgba(255, 255, 255, 0.95);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; }
+
+    .container { width: 100%; max-width: 1400px; margin: 0 auto; padding: 24px; }
+    
+    /* Header & Navbar */
+    .navbar {
+      width: 100%; height: 68px; display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; padding: 0 20px; background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow-md); margin-bottom: 22px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .brand-logo {
+      width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+      background: #F2D400; color: var(--text); border-radius: 14px;
+      box-shadow: 4px 4px 9px rgba(178, 173, 154, 0.55), -4px -4px 9px rgba(255, 255, 255, 0.9);
+      font-weight: bold; font-size: 18px;
+    }
+    .brand-name { font-size: 16.5px; font-weight: 700; color: var(--text); }
+
+    /* Card Layouts */
+    .card { background: var(--surface); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow-md); }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 22px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+    
+    /* Data Tables */
+    .inv-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .inv-table th {
+      text-align: left; padding: 12px 16px; background: var(--surface-2); color: var(--gray-700);
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    .inv-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .inv-table tbody tr:hover td { background: #efece4; }
+    .clickable-cell { color: var(--primary-ink); font-weight: 600; cursor: pointer; text-decoration: underline; }
+
+    /* Buttons */
+    .btn {
+      padding: 8px 16px; border-radius: 10px; border: none; background: var(--surface);
+      color: var(--gray-700); cursor: pointer; font-size: 14px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center; min-height: 38px;
+      box-shadow: var(--shadow-sm); transition: all 0.2s;
+    }
+    .btn:hover { background: #efece4; }
+    .btn:active { transform: translateY(1px); box-shadow: var(--neu-pressed); }
+    
+    .btn-approve {
+      background: var(--success); color: #fff;
+      box-shadow: 6px 6px 12px rgba(22, 163, 74, 0.35), -6px -6px 12px rgba(255, 255, 255, 0.85);
+    }
+    .btn-approve:hover { background: var(--success-dark); }
+    
+    .btn-reject {
+      background: var(--danger); color: #fff;
+      box-shadow: 6px 6px 12px rgba(220, 38, 38, 0.35), -6px -6px 12px rgba(255, 255, 255, 0.85);
+    }
+    .btn-reject:hover { background: var(--danger-dark); }
+    
+    .btn-primary {
+      background: linear-gradient(145deg, #ffd23d, #f5c518); color: #3d2e00;
+      box-shadow: 6px 6px 12px rgba(220, 180, 40, 0.45), -6px -6px 12px rgba(255, 255, 255, 0.95);
+    }
+    .btn-group { display: flex; gap: 8px; }
+
+    /* KPI Summary Grids */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .kpi-card { padding: 14px; background: var(--surface-2); border-radius: var(--radius); box-shadow: var(--neu-inset); }
+    .kpi-label { font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .kpi-value { font-size: 16px; font-weight: 700; color: var(--text); margin-top: 4px; }
+
+    .hidden { display: none; }
+
+    /* Status badges */
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: var(--gray-100); color: var(--gray-700); }
+    .status-badge.status-approved { background: var(--success-soft); color: var(--success-dark); }
+    .status-badge.status-rejected { background: var(--danger-soft); color: var(--danger-dark); }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .nav-link { text-decoration: none; font-size: 13.5px; font-weight: 600; }
+    .nav-link.active { text-decoration: underline; text-underline-offset: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- App Navbar -->
+  <header class="navbar">
+    <div class="nav-left" style="display:flex; align-items:center; gap:26px; min-width:0;">
+      <a class="brand" href="management.html" style="display:flex; align-items:center; gap:11px; text-decoration:none; color:var(--text);">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 8.5a2 2 0 0 1-2 1.5H8.5A2 2 0 0 1 6.5 14.5L5 4H2"/><circle cx="9" cy="20" r="1.6"/><circle cx="17" cy="20" r="1.6"/></svg>
+        </div>
+        <span class="brand-name">Procurement Hub</span>
+      </a>
+      <nav class="nav-links" aria-label="Main" style="display:flex; align-items:center; gap:6px;">
+        <a class="nav-link" href="store.html" style="color:var(--gray-700);">Requisitions</a>
+        <a class="nav-link" href="inventory.html" style="color:var(--gray-700);">Inventory</a>
+        <a class="nav-link" href="item.html" style="color:var(--gray-700);">Items</a>
+        <a class="nav-link active" href="Purchase dashboard.html" style="color:var(--gray-700);">Purchase</a>
+        <a class="nav-link" href="management.html" style="color:var(--gray-700);">Management</a>
+      </nav>
+    </div>
+    <div class="nav-right" style="display:flex; align-items:center; gap:12px;">
+      <div class="profile-pill" id="userChip" style="display:flex; align-items:center; gap:10px;"></div>
+      <button class="btn" type="button" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <div class="card">
+    
+    <!-- LAYOUT 1: MULTIPLE ITEMS DASHBOARD -->
+    <div id="layout-multiple">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Item Request Dashboard</h1>
+          <p class="page-subtitle" style="color: var(--muted);">Select any item row to inspect specific vendor parameters</p>
+        </div>
+        <div class="badge-neutral" style="padding: 6px 14px; border-radius: 9999px; background: var(--gray-100); font-weight: 600;" id="current-date">
+          Date: --/--/----
+        </div>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Item Type</th>
+            <th>No. of Vendors Available</th>
+            <th>Recent Purchase</th>
+            <th style="text-align: center;">Approvement Box</th>
+          </tr>
+        </thead>
+        <tbody id="multiple-items-body"></tbody>
+      </table>
+    </div>
+
+    <!-- LAYOUT 2: INDIVIDUAL ITEM DASHBOARD -->
+    <div id="layout-individual" class="hidden">
+      <div class="page-header">
+        <div>
+          <button class="btn btn-primary" onclick="showMultipleLayout()" style="margin-bottom: 12px;">← Back to Overview</button>
+          <h1 class="page-title">Vendor Evaluation</h1>
+        </div>
+      </div>
+
+      <!-- Detail Summary KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Requested Item</div>
+          <div class="kpi-value" id="detail-item-name">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Item Quantity</div>
+          <div class="kpi-value" id="detail-item-qty">500 Units</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Request Type</div>
+          <div class="kpi-value" id="detail-item-type">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Request Quotation</div>
+          <div class="kpi-value">RFQ-2026-9041</div>
+        </div>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>Vendors</th>
+            <th>Rate</th>
+            <th>Available Vendors</th>
+            <th>Delivery Terms</th>
+            <th style="text-align: center;">Proceed</th>
+          </tr>
+        </thead>
+        <tbody id="individual-vendors-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/gas-bridge.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // State pulled live from the local Excel workbook via offline-db.js
+    let items = [];       // Item Master rows {name, code, uom}
+    let approvals = [];   // Approvals rows {token, status, body, ...}
+    let inventory = [];   // Inventory rows {itemCode, itemName, qty, reorder, status}
+    let current = null;   // selected item for the individual layout
+
+    // Parse a 'Label: value' line out of an approval body (mirrors backend format)
+    function field(body, label) {
+      body = String(body || '');
+      const re = new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*(.+)$', 'im');
+      const m = body.match(re);
+      return m ? m[1].trim() : '';
+    }
+
+    function iconFor(name) {
+      return String(name || '')[0] ? String(name).charAt(0).toUpperCase() : '?';
+    }
+
+    function loadData() {
+      return Promise.all([
+        AB.api('/api/items'),
+        AB.api('/api/approvals'),
+        AB.api('/api/inventory')
+      ]).then(res => {
+        items = Array.isArray(res[0].data) ? res[0].data : [];
+        approvals = Array.isArray(res[1].data) ? res[1].data : [];
+        inventory = Array.isArray(res[2].data) ? res[2].data : [];
+      });
+    }
+
+    // Build the overview rows: one per item master entry that appears in an
+    // approved or pending requisition, enriched with stock + last-purchase context.
+    function buildRows() {
+      return items.map(itm => {
+        const related = approvals.filter(a =>
+          String(field(a.body, 'Item Name') || '').toLowerCase() === String(itm.name).toLowerCase()
+        );
+        // most recent approved, else latest overall
+        const decided = related.filter(a => a.status === 'approved')
+          .sort((x, y) => String(y.decided_at || '').localeCompare(String(x.decided_at || '')))[0]
+          || related[0];
+        const pend = related.filter(a => a.status === 'pending' || a.status === 'escalated');
+        const pendingQty = pend.reduce((s, a) => s + (parseInt(String(field(a.body, 'Item Qty') || '').replace(/\D/g, ''), 10) || 0), 0);
+        const inv = inventory.find(i =>
+          String(i.itemName).toLowerCase() === String(itm.name).toLowerCase() ||
+          String(i.itemCode).toLowerCase() === String(itm.code).toLowerCase()
+        ) || { qty: 0, status: 'out' };
+        return {
+          name: itm.name,
+          code: itm.code,
+          uom: itm.uom,
+          qty: pendingQty || (decided ? (parseInt(String(field(decided.body, 'Item Qty') || '').replace(/\D/g, ''), 10) || 0) : 0),
+          recent: decided ? (decided.decided_at || decided.requested_at) : '',
+          stock: inv.qty,
+          stockStatus: inv.status
+        };
+      }).filter(r => r.qty > 0); // only items that are actively requested
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso).slice(0, 10);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function stockBadge(st) {
+      if (st === 'out') return '<span class="status-badge status-rejected"><span class="status-dot"></span>Out</span>';
+      if (st === 'low') return '<span class="status-badge" style="background:var(--warning-soft);color:var(--warning);"><span class="status-dot"></span>Low</span>';
+      return '<span class="status-badge status-approved"><span class="status-dot"></span>In Stock</span>';
+    }
+
+    function renderMultipleLayout() {
+      const rows = buildRows();
+      const tbody = document.getElementById("multiple-items-body");
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">No active item requests found in the workbook.</td></tr>';
+        return;
+      }
+      document.getElementById("current-date").innerText = "Date: " + new Date().toLocaleDateString();
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td><span class="clickable-cell" onclick="showIndividualLayout(${AB.escapeHtml(JSON.stringify(r.name))}, ${AB.escapeHtml(JSON.stringify(r.code))})">${AB.escapeHtml(r.name)}</span></td>
+          <td><span class="status-note">${AB.escapeHtml(r.code)}</span></td>
+          <td><strong>${r.qty}</strong> <small style="color:var(--muted)">${AB.escapeHtml(r.uom || '')}</small></td>
+          <td>${AB.escapeHtml(fmtDate(r.recent))}</td>
+          <td style="text-align: center;">${stockBadge(r.stockStatus)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Individual view: vendor rows derived from the requisition's rate line +
+    // current stock context for the selected item.
+    function showIndividualLayout(itemName, itemCode) {
+      current = { name: itemName, code: itemCode };
+      const related = approvals.filter(a =>
+        String(field(a.body, 'Item Name') || '').toLowerCase() === String(itemName).toLowerCase()
+      );
+      const pend = related.filter(a => a.status === 'pending' || a.status === 'escalated');
+      const open = pend[0] || related[0] || null;
+      const qty = open ? (parseInt(String(field(open.body, 'Item Qty') || '').replace(/\D/g, ''), 10) || 0) : 0;
+      const rate = open ? (parseFloat(field(open.body, 'Rate')) || 0) : 0;
+      const dept = open ? field(open.body, 'Department') : '';
+      const inv = inventory.find(i =>
+        String(i.itemName).toLowerCase() === String(itemName).toLowerCase() ||
+        String(i.itemCode).toLowerCase() === String(itemCode).toLowerCase()
+      ) || { qty: 0, status: 'out', reorder: 0 };
+
+      document.getElementById("detail-item-name").innerText = itemName;
+      document.getElementById("detail-item-qty").innerText = (qty || '—') + (qty ? ' Units' : '');
+      document.getElementById("detail-item-type").innerText = dept || itemCode || '—';
+
+      // Vendor "rows": use the requisition rate as the offer, plus stock status.
+      const vendorRows = [
+        { name: (rate ? 'Quoted rate' : 'Rate not quoted'), rate: rate ? ('Rs ' + rate.toFixed(2) + ' / unit') : '—', status: inv.stockStatus, terms: stockTerms(inv.qty, inv.reorder) },
+        { name: 'Current Stock', rate: inv.qty + ' ' + (inv.uom || 'Units'), status: inv.stockStatus, terms: 'Reorder level: ' + inv.reorder }
+      ];
+
+      const tbody = document.getElementById("individual-vendors-body");
+      tbody.innerHTML = vendorRows.map(v => `
+        <tr>
+          <td><strong>${AB.escapeHtml(v.name)}</strong></td>
+          <td style="color: var(--primary-ink); font-weight: 700;">${AB.escapeHtml(v.rate)}</td>
+          <td>${stockBadge(v.status)}</td>
+          <td>${AB.escapeHtml(v.terms)}</td>
+          <td style="text-align: center;">
+            <button class="btn btn-approve" onclick="AB.toast('Vendor line acknowledged for ${AB.escapeHtml(itemName)}')">Yes</button>
+            <button class="btn btn-reject" onclick="AB.toast('Declined for ${AB.escapeHtml(itemName)}', true)">No</button>
+          </td>
+        </tr>
+      `).join('');
+
+      document.getElementById("layout-multiple").classList.add("hidden");
+      document.getElementById("layout-individual").classList.remove("hidden");
+    }
+
+    function stockTerms(qty, reorder) {
+      if (qty <= 0) return 'Out of stock — PO needed';
+      if (qty <= reorder) return 'Below reorder level';
+      return 'Adequate on hand';
+    }
+
+    function showMultipleLayout() {
+      document.getElementById("layout-individual").classList.add("hidden");
+      document.getElementById("layout-multiple").classList.remove("hidden");
+      renderMultipleLayout();
+    }
+
+    // Auth + init
+    AB.api('/api/me').then(function (r) {
+      const me = r.data || {};
+      if (!me || !me.email) { window.location.href = 'login.html'; return; }
+      AB.applyNavPermissions(me);
+      AB.initUserChip();
+      AB.guardPage(me, 'Purchase dashboard.html');
+    });
+    AB.initUserChip();
+    AB.startPolling(function () { loadData().then(renderMultipleLayout); }, 8000);
+  </script>
+
+</body>
+</html>

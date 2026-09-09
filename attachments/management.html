@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <title>Requisition Approval — Procurement</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <style>
+        /* ---- Request Details v2 (rd-) — scoped, does not touch styles.css ---- */
+        .rd { --rd-gold:#b45309; --rd-gold-bg:#fff7d6; --rd-green:#16a34a; --rd-green-bg:#e8f7ee;
+              --rd-green-dark:#15803d; --rd-red:#dc2626; --rd-red-bg:#fdeaea;
+              --rd-amber:#d97706; --rd-amber-bg:#fdf0d4; --rd-orange:#ea580c; --rd-orange-bg:#ffe8da;
+              --rd-slate:#475569; --rd-border:#e2ddd0; --rd-ink:#2b2620; --rd-sub:#7a7164; }
+        .rd { padding: 4px 2px 0; }
+        .rd-topbar { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+        .rd-back { width:34px; height:34px; border-radius:10px; border:1px solid var(--rd-border);
+            background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--rd-ink); }
+        .rd-back:hover { background:#f4f6fb; }
+        .rd-title { font-size:20px; font-weight:700; color:var(--rd-ink); margin:0; flex:1; }
+        .rd-topbar-right { display:flex; align-items:center; gap:14px; }
+        .rd-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px;
+            font-size:12.5px; font-weight:600; }
+        .rd-pill-pending { background:var(--rd-amber-bg); color:var(--rd-amber); }
+        .rd-pill-approved { background:var(--rd-green-bg); color:var(--rd-green); }
+        .rd-pill-confirmed { background:var(--rd-green-bg); color:var(--rd-green-dark); }
+        .rd-pill-rejected { background:var(--rd-red-bg); color:var(--rd-red); }
+        .rd-pill-escalated { background:var(--rd-orange-bg); color:var(--rd-orange); }
+        .rd-pill .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+        .rd-reqid { font-size:13px; color:var(--rd-sub); white-space:nowrap; }
+        .rd-reqid strong { color:var(--rd-ink); }
+
+        .rd-itemcard { display:flex; gap:18px; align-items:flex-start; background:#fff;
+            border:1px solid var(--rd-border); border-radius:14px; padding:16px 18px; margin-bottom:14px; flex-wrap:wrap; }
+        .rd-item-icon { width:56px; height:56px; border-radius:10px; background:var(--rd-gold-bg);
+            display:flex; align-items:center; justify-content:center; color:var(--rd-gold); flex-shrink:0; }
+        .rd-item-icon svg { width:28px; height:28px; }
+        .rd-item-main { min-width:180px; flex:1 1 200px; }
+        .rd-item-title-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .rd-item-title-row h3 { margin:0; font-size:17px; font-weight:700; color:var(--rd-ink); }
+        .rd-tag { background:var(--rd-gold-bg); color:var(--rd-gold); font-size:11.5px; font-weight:600;
+            padding:3px 10px; border-radius:999px; }
+        .rd-item-meta { display:flex; flex-direction:column; gap:5px; margin-top:8px; }
+        .rd-item-meta span { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--rd-sub); }
+        .rd-item-meta svg { width:15px; height:15px; flex-shrink:0; color:var(--rd-sub); }
+        .rd-item-meta strong { color:var(--rd-ink); font-weight:600; }
+        .rd-item-dates, .rd-item-order { display:flex; flex-direction:column; gap:10px;
+            border-left:1px solid var(--rd-border); padding-left:18px; font-size:12.5px; color:var(--rd-sub); }
+        .rd-item-dates span, .rd-item-order span { display:flex; align-items:flex-start; gap:7px; }
+        .rd-item-dates svg, .rd-item-order svg { width:14px; height:14px; margin-top:1px; flex-shrink:0; }
+        .rd-item-dates strong, .rd-item-order strong { display:block; color:var(--rd-ink); font-size:13.5px; font-weight:600; margin-top:1px; }
+
+        .rd-kpi-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:14px; }
+        .rd-kpi { background:#fff; border:1px solid var(--rd-border); border-radius:14px; padding:14px 16px;
+            display:flex; flex-direction:column; gap:10px; }
+        .rd-kpi-top { display:flex; align-items:center; justify-content:space-between; }
+        .rd-kpi-label { font-size:12.5px; color:var(--rd-sub); font-weight:600; }
+        .rd-kpi-icon { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; }
+        .rd-kpi-icon svg { width:17px; height:17px; }
+        .rd-kpi-icon.blue { background:var(--rd-gold-bg); color:var(--rd-gold); }
+        .rd-kpi-icon.red { background:var(--rd-red-bg); color:var(--rd-red); }
+        .rd-kpi-icon.green { background:var(--rd-green-bg); color:var(--rd-green); }
+        .rd-kpi-val { font-size:24px; font-weight:700; color:var(--rd-ink); }
+        .rd-kpi-val.red { color:var(--rd-red); }
+        .rd-kpi-val small { font-size:13px; font-weight:600; color:var(--rd-sub); margin-left:3px; }
+        .rd-kpi-sub { font-size:12px; color:var(--rd-sub); margin-top:-4px; }
+        .rd-kpi-sub.warn { color:var(--rd-red); font-weight:600; }
+
+        .rd-two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; align-items:stretch; }
+        .rd-panel { background:#fff; border:1px solid var(--rd-border); border-radius:14px; padding:16px 18px; }
+        .rd-panel h3 { margin:0 0 14px; font-size:14.5px; font-weight:700; color:var(--rd-ink); display:flex; align-items:center; gap:8px; }
+        .rd-panel h3 .rd-sub-label { font-weight:500; font-size:12px; color:var(--rd-sub); }
+
+        .rd-stockbar-track { position:relative; height:10px; border-radius:999px; background:#e5e9f0; overflow:hidden; margin-top:6px; }
+        .rd-stockbar-fill { position:absolute; inset:0 auto 0 0; height:100%; border-radius:999px;
+            background:linear-gradient(90deg,#dc2626,#f59e0b,#facc15); }
+        .rd-stockbar-fill.ok { background:linear-gradient(90deg,#16a34a,#22c55e); }
+        .rd-stockbar-scale { display:flex; justify-content:space-between; font-size:12px; color:var(--rd-sub); margin-top:6px; }
+        .rd-stockbar-readout { text-align:center; font-size:15px; font-weight:700; color:var(--rd-ink); margin-top:14px; }
+        .rd-stockbar-readout span { font-weight:500; color:var(--rd-sub); font-size:13px; }
+        .rd-stockbar-warn { display:flex; align-items:center; gap:8px; background:var(--rd-red-bg); color:var(--rd-red);
+            border-radius:10px; padding:9px 12px; font-size:12.5px; font-weight:600; margin-top:12px; }
+
+        .rd-trend-wrap { display:flex; gap:14px; align-items:stretch; }
+        .rd-trend-chart { flex:1; min-width:0; }
+        .rd-trend-chart svg { width:100%; height:100px; display:block; }
+        .rd-trend-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--rd-sub); margin-top:2px; }
+        .rd-trend-side { display:flex; flex-direction:column; gap:10px; justify-content:center; min-width:104px; }
+        .rd-trend-stat { background:#f8fafc; border-radius:10px; padding:9px 11px; }
+        .rd-trend-stat-label { font-size:11px; color:var(--rd-sub); }
+        .rd-trend-stat-val { font-size:15px; font-weight:700; color:var(--rd-gold); }
+        .rd-trend-stat-val.amber { color:var(--rd-amber); }
+
+        .rd-timeline { display:flex; align-items:center; margin-top:10px; }
+        .rd-tl-node { display:flex; flex-direction:column; align-items:center; gap:9px; width:90px; text-align:center; padding:6px 0; }
+        .rd-tl-dot { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+        .rd-tl-dot svg { width:11px; height:11px; }
+        .rd-tl-dot.done { background:var(--rd-green); color:#fff; }
+        .rd-tl-dot.current { background:var(--rd-gold); box-shadow:0 0 0 4px var(--rd-gold-bg); }
+        .rd-tl-dot.upcoming { background:#fff; border:2px solid #cbd5e1; }
+        .rd-tl-line { flex:1; height:2px; background:#cbd5e1; }
+        .rd-tl-line.done { background:var(--rd-green); }
+        .rd-tl-date { font-size:12px; font-weight:600; color:var(--rd-ink); margin-top:5px; }
+        .rd-tl-qty { font-size:13px; font-weight:700; color:var(--rd-ink); margin-top:3px; }
+        .rd-tl-tag { font-size:11px; color:var(--rd-sub); margin-top:3px; }
+
+        .rd-ai { display:flex; flex-direction:column; }
+        .rd-ai-top { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+        .rd-ai-body { display:flex; align-items:center; gap:16px; margin-top:8px; }
+        .rd-ai-list { list-style:none; margin:0; padding:0; flex:1; display:flex; flex-direction:column; gap:9px; }
+        .rd-ai-list li { display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--rd-ink); }
+        .rd-ai-icon { width:16px; height:16px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+        .rd-ai-icon svg { width:10px; height:10px; }
+        .rd-ai-icon.good { background:var(--rd-green-bg); color:var(--rd-green); }
+        .rd-ai-icon.bad { background:var(--rd-red-bg); color:var(--rd-red); }
+        .rd-score { position:relative; width:88px; height:88px; flex-shrink:0; }
+        .rd-score svg { width:88px; height:88px; transform:rotate(-90deg); }
+        .rd-score-text { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            font-size:19px; font-weight:800; color:var(--rd-ink); }
+        .rd-score-label { text-align:center; font-size:11px; color:var(--rd-sub); margin-top:6px; }
+
+        .rd-actions { display:flex; gap:12px; margin-top:4px; }
+        .rd-btn { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:13px;
+            border-radius:14px; font-size:14px; font-weight:700; border:none; cursor:pointer;
+            box-shadow:5px 5px 10px rgba(196,190,172,.45), -5px -5px 10px rgba(255,255,255,.85); transition:all .18s ease; }
+        .rd-btn svg { width:16px; height:16px; }
+        .rd-btn-approve { background:var(--rd-green); color:#fff; box-shadow:6px 6px 12px rgba(22,163,74,.35), -6px -6px 12px rgba(255,255,255,.85); }
+        .rd-btn-approve:active { background:#15803d; box-shadow:inset 5px 5px 10px rgba(0,0,0,.25); }
+        .rd-btn-reject { background:var(--rd-red); color:#fff; box-shadow:6px 6px 12px rgba(220,38,38,.35), -6px -6px 12px rgba(255,255,255,.85); }
+        .rd-btn-reject:active { background:#b91c1c; box-shadow:inset 5px 5px 10px rgba(0,0,0,.25); }
+        .rd-btn-comment { background:#f7f5ef; color:var(--rd-ink); }
+        .rd-btn-comment:active { box-shadow:inset 5px 5px 10px rgba(196,190,172,.55), inset -5px -5px 10px rgba(255,255,255,.85); }
+
+        /* ---- Neumorphic overrides for the rd- card set ---- */
+        .rd-back { border:none; background:#f7f5ef; box-shadow:5px 5px 10px rgba(196,190,172,.45), -5px -5px 10px rgba(255,255,255,.85); border-radius:10px; }
+        .rd-back:active { box-shadow:inset 4px 4px 8px rgba(196,190,172,.55), inset -4px -4px 8px rgba(255,255,255,.85); }
+        .rd-itemcard { background:#f7f5ef; border:none; border-radius:14px; padding:16px 18px; margin-bottom:14px;
+            box-shadow:8px 8px 16px rgba(196,190,172,.5), -8px -8px 16px rgba(255,255,255,.9); }
+        .rd-kpi { background:#f7f5ef; border:none; border-radius:14px; padding:14px 16px;
+            box-shadow:6px 6px 12px rgba(196,190,172,.45), -6px -6px 12px rgba(255,255,255,.85); }
+        .rd-panel { background:#f7f5ef; border:none; border-radius:14px; padding:16px 18px;
+            box-shadow:6px 6px 12px rgba(196,190,172,.45), -6px -6px 12px rgba(255,255,255,.85); }
+        .rd-trend-stat { background:#f1eee5; box-shadow:inset 4px 4px 8px rgba(196,190,172,.4), inset -4px -4px 8px rgba(255,255,255,.85); border-radius:10px; }
+        .rd-stockbar-track { background:#efece4; box-shadow:inset 3px 3px 7px rgba(196,190,172,.55), inset -3px -3px 7px rgba(255,255,255,.8); }
+        .rd-item-dates, .rd-item-order { border-left:1px solid #e2ddd0; }
+
+        /* ---- Fullscreen request details ---- */
+        #detailsContent:fullscreen,
+        #detailsContent:-webkit-full-screen { background:transparent; padding:28px 34px; overflow-y:auto; display:block !important; }
+        #detailsContent:fullscreen::-webkit-scrollbar { width:8px; }
+        #detailsContent:fullscreen::-webkit-scrollbar-thumb { background:#d0cab9; border-radius:999px; }
+
+        @media (max-width: 900px) {
+            .rd-kpi-grid { grid-template-columns:repeat(2,1fr); }
+            .rd-two-col { grid-template-columns:1fr; }
+            .rd-item-dates, .rd-item-order { border-left:none; padding-left:0; border-top:1px solid var(--rd-border); padding-top:10px; }
+            .rd-actions { flex-direction:column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="nav-left">
+        <a class="brand" href="management.html">
+          <span class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 8.5a2 2 0 0 1-2 1.5H8.5A2 2 0 0 1 6.5 14.5L5 4H2"/><circle cx="9" cy="20" r="1.6"/><circle cx="17" cy="20" r="1.6"/></svg>
+          </span>
+          <span class="brand-name">Procurement Hub</span>
+        </a>
+        <nav class="nav-links" aria-label="Main">
+          <a class="nav-link" href="store.html">Requisitions</a>
+          <a class="nav-link" href="inventory.html">Inventory</a>
+          <a class="nav-link" href="item.html">Items</a>
+          <a class="nav-link active" href="management.html">Management</a>
+        </nav>
+      </div>
+      <div class="nav-right">
+        <button class="icon-btn" type="button" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="notif-badge" id="navNotifBadge">0</span>
+        </button>
+        <div class="profile-pill" id="userChip"></div>
+        <button class="signout-nav" type="button" onclick="signOut()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          <span>Sign out</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-title">
+            <div class="breadcrumb">
+                <a href="management.html">Home</a> / Requisitions / Approval
+                <span style="margin-left: 12px; font-size: 13px;">
+                    (<a href="store.html" style="color: var(--primary-ink); font-weight: 500;">Store Dashboard</a> | <a href="inventory.html" style="color: var(--primary-ink); font-weight: 500;">Inventory</a> | <a href="item.html" style="color: var(--primary-ink); font-weight: 500;">Public Form</a>)
+                </span>
+            </div>
+            <h1>Requisition Approval</h1>
+            <p>Review and approve purchase requests</p>
+        </div>
+        <div class="header-actions">
+            <span class="badge" id="pendingBadge">0 pending</span>
+        </div>
+    </header>
+
+    <div class="main-grid">
+        <!-- Left Column -->
+        <div class="left-column">
+            <!-- Pending Requests -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Pending Requests <span class="count-badge" id="pendingCountBadge">0</span></div>
+                </div>
+                
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterRequests('all', this)">All <span id="countAll">0</span></button>
+                    <button class="filter-btn" onclick="filterRequests('pending', this)">Pending <span id="countPending">0</span></button>
+                    <button class="filter-btn" onclick="filterRequests('approved', this)">Approved <span id="countApproved">0</span></button>
+                    <button class="filter-btn" onclick="filterRequests('rejected', this)">Rejected <span id="countRejected">0</span></button>
+                </div>
+
+                <div class="request-list" id="requestList">
+                    <div class="empty-state" style="padding: 16px;">Loading requisitions…</div>
+                </div>
+            </div>
+            </div>
+
+            <!-- Right Column -->
+        <div class="right-column">
+            <!-- Request Details -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Request Details</div>
+                </div>
+                
+                <div id="emptyState" class="empty-state">
+                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 12h6M12 9v6M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z" fill="none"/>
+                    </svg>
+                    <h3>Select a request</h3>
+                    <p>No request selected</p>
+                    <p style="font-size: 13px; margin-top: 8px;">Select a requisition from the list to view details and take action.</p>
+                </div>
+
+                <div id="detailsContent" class="rd" style="display: none;">
+
+                    <!-- Topbar -->
+                    <div class="rd-topbar">
+                        <button class="rd-back" onclick="clearSelection()" data-tip="Back to list" aria-label="Back">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                        </button>
+                        <h2 class="rd-title">Request Details</h2>
+                        <div class="rd-topbar-right">
+                            <button class="rd-back" onclick="toggleFullScreen()" data-tip="Toggle full screen" aria-label="Toggle full screen">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                            </button>
+                            <span class="rd-pill rd-pill-pending" id="detailStatus" style="display:none;"><span class="dot"></span>Pending</span>
+                            <span class="rd-reqid">Req ID: <strong id="detId">—</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Item summary card -->
+                    <div class="rd-itemcard">
+                        <div class="rd-item-icon" id="detIcon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+                        </div>
+                        <div class="rd-item-main">
+                            <div class="rd-item-title-row">
+                                <h3 id="detItem">—</h3>
+                                <span class="rd-tag" id="detTag">Regular Item</span>
+                            </div>
+                            <div class="rd-item-meta">
+                                <span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3"/></svg>
+                                    Department: <strong id="detDept">—</strong>
+                                </span>
+                                <span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/></svg>
+                                    Requester: <strong id="detRequester">—</strong>
+                                </span>
+                            </div>
+                            <p id="detReasonRow" style="display:none; margin-top:8px; font-size:12.5px; color:var(--rd-red);">
+                                <strong>Reason:</strong> <span id="detReason">—</span>
+                            </p>
+                        </div>
+                        <div class="rd-item-dates">
+                            <span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+                                <span>Requested On<strong id="detDate">—</strong></span>
+                            </span>
+                            <span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                <span>Recently Ordered On<strong id="detLastOrderDate">—</strong></span>
+                            </span>
+                        </div>
+                        <div class="rd-item-order">
+                            <span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 12 12 3.4 4.4 12 12 20.6z"/></svg>
+                                <span>Ordered For<strong id="detOrderedFor">—</strong></span>
+                            </span>
+                            <span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
+                                <span>Purpose<strong id="detPurpose">—</strong></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- TCS Bridge Status (auto-updated by tcs_worker / bot_api) -->
+                    <div id="tcsPanel" class="rd-panel" style="display:none; margin-bottom:14px; border-left:4px solid var(--rd-gold);">
+                        <h3 style="margin-bottom:10px;">TCS iON Bridge
+                            <span id="tcsStatusPill" class="rd-pill rd-pill-pending" style="margin-left:8px; display:none;"></span>
+                            <span class="rd-sub-label" id="tcsUpdatedAt" style="margin-left:auto; font-size:11px;"></span>
+                        </h3>
+                        <div style="display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:var(--rd-sub);">
+                            <span>Requisition No: <strong id="tcsReqNo" style="color:var(--rd-ink);">—</strong></span>
+                            <span id="tcsErrorWrap" style="display:none; color:var(--rd-red);">Error: <strong id="tcsError">—</strong></span>
+                        </div>
+                        <div id="tcsHint" style="margin-top:8px; font-size:12px; color:var(--rd-sub);"></div>
+                    </div>
+
+                    <!-- KPI Section -->
+                    <div class="rd-kpi-grid">
+                        <div class="rd-kpi">
+                            <div class="rd-kpi-top">
+                                <span class="rd-kpi-label">Requested Quantity</span>
+                                <div class="rd-kpi-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2l2.6 12.4a2 2 0 0 0 2 1.6h9a2 2 0 0 0 2-1.6L22 7H6"/></svg></div>
+                            </div>
+                            <div class="rd-kpi-val"><span id="kpiQty">—</span><small>Units</small></div>
+                            <div class="rd-kpi-sub">This Request</div>
+                        </div>
+                        <div class="rd-kpi" id="kpiStockCard">
+                            <div class="rd-kpi-top">
+                                <span class="rd-kpi-label">Current Stock</span>
+                                <div class="rd-kpi-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.5c0 .38-.21.71-.5.87l-7.5 4.13a2 2 0 0 1-2 0l-7.5-4.13a1 1 0 0 1-.5-.87v-9a1 1 0 0 1 .5-.87l7.5-4.13a2 2 0 0 1 2 0l7.5 4.13a1 1 0 0 1 .5.87z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></div>
+                            </div>
+                            <div class="rd-kpi-val red"><span id="kpiCurrent">—</span><small>Units</small></div>
+                            <div class="rd-kpi-sub">Available</div>
+                        </div>
+                        <div class="rd-kpi">
+                            <div class="rd-kpi-top">
+                                <span class="rd-kpi-label">Base Stock</span>
+                                <div class="rd-kpi-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg></div>
+                            </div>
+                            <div class="rd-kpi-val"><span id="kpiBase">—</span><small>Units</small></div>
+                            <div class="rd-kpi-sub">Minimum Target</div>
+                        </div>
+                        <div class="rd-kpi">
+                            <div class="rd-kpi-top">
+                                <span class="rd-kpi-label">Stock Status</span>
+                                <div class="rd-kpi-icon red" id="kpiStatusIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 7 4-4 5 5M15 14h5v-5"/></svg></div>
+                            </div>
+                            <div class="rd-kpi-val red" id="kpiStatusText" style="font-size:18px;">—</div>
+                            <div class="rd-kpi-sub" id="kpiStatusSub">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Stock Level + Consumption Trend -->
+                    <div class="rd-two-col">
+                        <section class="rd-panel">
+                            <h3>Stock Level</h3>
+                            <div class="rd-stockbar-track"><div class="rd-stockbar-fill" id="stockFill"></div></div>
+                            <div class="rd-stockbar-scale"><span id="scaleZero">0</span><span id="scaleBase">—</span></div>
+                            <div class="rd-stockbar-readout"><span id="stockReadout">— / —</span> <span>Units</span></div>
+                            <div class="rd-stockbar-warn" id="stockWarning" style="display:none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                                <span id="stockWarningText">Current stock is below base stock</span>
+                            </div>
+                        </section>
+                        <section class="rd-panel">
+                            <h3>Consumption Trend <span class="rd-sub-label">(Last 6 Weeks)</span></h3>
+                            <div class="rd-trend-wrap">
+                                <div class="rd-trend-chart">
+                                    <svg id="trendSvg" viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+                                    <div class="rd-trend-labels"><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span></div>
+                                </div>
+                                <div class="rd-trend-side">
+                                    <div class="rd-trend-stat">
+                                        <div class="rd-trend-stat-label">Avg. Weekly Use</div>
+                                        <div class="rd-trend-stat-val" id="trendAvg">—</div>
+                                    </div>
+                                    <div class="rd-trend-stat">
+                                        <div class="rd-trend-stat-label">Projected Need</div>
+                                        <div class="rd-trend-stat-val amber" id="trendProjected">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Order History + AI Recommendation -->
+                    <div class="rd-two-col">
+                        <section class="rd-panel">
+                            <h3>Order History</h3>
+                            <div class="rd-timeline">
+                                <div class="rd-tl-node">
+                                    <div class="rd-tl-dot done" id="tlDot1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+                                    <div class="rd-tl-date" id="tlLastDate">—</div>
+                                    <div class="rd-tl-qty" id="tlLastQty">—</div>
+                                    <div class="rd-tl-tag">Last Order</div>
+                                </div>
+                                <div class="rd-tl-line done" id="tlLine1"></div>
+                                <div class="rd-tl-node">
+                                    <div class="rd-tl-dot current"></div>
+                                    <div class="rd-tl-date" id="tlCurDate">—</div>
+                                    <div class="rd-tl-qty" id="tlCurQty">—</div>
+                                    <div class="rd-tl-tag">Current Request</div>
+                                </div>
+                                <div class="rd-tl-line" id="tlLine2"></div>
+                                <div class="rd-tl-node">
+                                    <div class="rd-tl-dot upcoming" id="tlDot3"></div>
+                                    <div class="rd-tl-date" id="tlNextDate">—</div>
+                                    <div class="rd-tl-qty" id="tlNextQty">&nbsp;</div>
+                                    <div class="rd-tl-tag" id="tlNextTag">Next Review</div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="rd-panel rd-ai">
+                            <div class="rd-ai-top">
+                                <h3 style="margin-bottom:0;">Recommendation <span class="rd-sub-label">System assessment</span></h3>
+                                <span class="rd-pill rd-pill-approved" id="recPill">Recommended: Approve</span>
+                            </div>
+                            <div class="rd-ai-body">
+                                <ul class="rd-ai-list" id="recList"></ul>
+                                <div>
+                                    <div class="rd-score">
+                                        <svg viewBox="0 0 88 88">
+                                            <circle cx="44" cy="44" r="38" fill="none" stroke="#e5e9f0" stroke-width="8"/>
+                                            <circle id="scoreCircle" cx="44" cy="44" r="38" fill="none" stroke="var(--rd-green)" stroke-width="8" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
+                                        </svg>
+                                        <div class="rd-score-text" id="scoreText">—</div>
+                                    </div>
+                                    <div class="rd-score-label">Priority Score</div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Action Area -->
+                    <div class="rd-actions">
+                        <button class="rd-btn rd-btn-approve" onclick="openModal('approveModal')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            Approve Request
+                        </button>
+                        <button class="rd-btn rd-btn-reject" onclick="openModal('rejectModal')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            Reject Request
+                        </button>
+                        <button class="rd-btn rd-btn-comment" onclick="addComment()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.9-.9L3 20l1-4.9A8.4 8.4 0 1 1 21 11.5z"/></svg>
+                            Add Comment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approve Modal -->
+<div class="modal-overlay" id="approveModal">
+    <div class="modal">
+        <h3>Approve Requisition?</h3>
+        <p>Are you sure you want to approve <strong id="modalReqId">REQ-2024-016</strong>?</p>
+        <p><span id="modalItem">A4 Paper — 500 units</span><br>Requester: <span id="modalRequester">John Smith</span></p>
+        <div class="modal-actions">
+            <button class="btn" onclick="closeModal('approveModal')">Cancel</button>
+            <button class="btn btn-success" onclick="approveRequest()">Approve Request</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal-overlay" id="rejectModal">
+    <div class="modal">
+        <h3>Reject Requisition?</h3>
+        <p>Requisition: <strong id="rejectModalReqId">REQ-2024-016</strong></p>
+        <form onsubmit="event.preventDefault(); rejectRequest();">
+            <div class="form-group">
+                <label>Rejection Reason *</label>
+                <select required id="rejectReason">
+                    <option value="">Select reason</option>
+                    <option>Incorrect quantity</option>
+                    <option>Duplicate request</option>
+                    <option>Budget unavailable</option>
+                    <option>Incorrect specification</option>
+                    <option>Vendor issue</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Comments</label>
+                <textarea id="rejectComments" placeholder="Add any additional comments..."></textarea>
+            </div>
+            <div class="modal-actions" style="margin-top: 0;">
+                <button type="button" class="btn" onclick="closeModal('rejectModal')">Cancel</button>
+                <button type="submit" class="btn btn-danger">Reject Request</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="js/gas-bridge.js"></script>
+<script src="js/app.js"></script>
+<script>
+    // State
+    let currentReqId = '';
+    let approvals = [];
+    let currentFilter = 'all';
+
+    // Utils
+    function field(body, label) {
+        const line = String(body || '').split('\n').find(l => l.indexOf(label) === 0);
+        return line ? line.slice(label.length).trim() : '';
+    }
+
+    function display(a) {
+        return {
+            item: field(a.body, 'Item Name:') || a.subject || a.token,
+            requester: field(a.body, 'Indenter Name:') || a.from || 'Unknown',
+            qty: field(a.body, 'Item Qty:'),
+            dept: field(a.body, 'Department:')
+        };
+    }
+
+    // Load requisitions from the Google Sheet via GAS
+    async function loadRequests() {
+        const r = await AB.api('/api/approvals');
+        if (r.error) {
+            AB.toast('Failed to load requisitions: ' + r.error, true);
+            approvals = [];
+        } else {
+            approvals = Array.isArray(r.data) ? r.data : (r.data && r.data.approvals || []);
+        }
+        renderRequests();
+        if (currentReqId) {
+            const still = approvals.find(a => a.token === currentReqId);
+            if (still) selectByToken(currentReqId); else clearSelection();
+        }
+    }
+
+    function renderRequests() {
+        const pending = approvals.filter(a => a.status === 'pending' || a.status === 'escalated');
+        const approved = approvals.filter(a => a.status === 'approved');
+        const rejected = approvals.filter(a => a.status === 'rejected');
+
+        document.getElementById('pendingBadge').textContent = pending.length + ' pending';
+        document.getElementById('pendingCountBadge').textContent = pending.length;
+        document.getElementById('navNotifBadge').textContent = pending.length;
+        document.getElementById('countAll').textContent = approvals.length;
+        document.getElementById('countPending').textContent = pending.length;
+        document.getElementById('countApproved').textContent = approved.length;
+        document.getElementById('countRejected').textContent = rejected.length;
+
+        const shown = approvals.filter(a => currentFilter === 'all' || a.status === currentFilter ||
+            (currentFilter === 'pending' && a.status === 'escalated'));
+        const list = document.getElementById('requestList');
+        if (!shown.length) {
+            list.innerHTML = '<div class="empty-state" style="padding: 16px;">No ' + currentFilter + ' requests found.</div>';
+            return;
+        }
+        list.innerHTML = shown.map(a => {
+            const d = display(a);
+            return '<div class="request-item ' + AB.escapeHtml(a.status) + '" onclick="selectByToken(\'' + AB.escapeHtml(a.token) + '\')">' +
+                '<div class="req-id">' + AB.escapeHtml(a.token) + '</div>' +
+                '<div class="req-desc">' + AB.escapeHtml(d.item + ' • ' + d.requester) + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function selectByToken(token) {
+        const a = approvals.find(x => x.token === token);
+        if (!a) return;
+        const d = display(a);
+
+        currentReqId = token;
+        document.querySelectorAll('.request-item').forEach(el => {
+            el.classList.toggle('active', el.querySelector('.req-id').textContent === token);
+        });
+
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('detailsContent').style.display = 'block';
+
+        const statusPillClass = { pending: 'rd-pill-pending', approved: 'rd-pill-approved', rejected: 'rd-pill-rejected', escalated: 'rd-pill-escalated' };
+        const statusBadge = document.getElementById('detailStatus');
+        statusBadge.className = 'rd-pill ' + (statusPillClass[a.status] || 'rd-pill-pending');
+        statusBadge.innerHTML = '<span class="dot"></span>' + AB.statusLabel(a.status);
+        statusBadge.style.display = 'inline-flex';
+
+        // Item summary card
+        document.getElementById('detItem').textContent = d.item;
+        document.getElementById('detId').textContent = a.token;
+        document.getElementById('detRequester').textContent = d.requester;
+        document.getElementById('detDept').textContent = d.dept || '—';
+        document.getElementById('detTag').textContent = field(a.body, 'Type:') || 'Regular Item';
+        document.getElementById('detDate').textContent = fmtDay(a.requested_at);
+        document.getElementById('detReasonRow').style.display = (a.status === 'rejected' && a.reason) ? 'block' : 'none';
+        document.getElementById('detReason').textContent = a.reason || '—';
+        document.getElementById('detPurpose').textContent = field(a.body, 'Purpose:') || field(a.body, 'Description:') || '—';
+
+        const qtyNum = parseInt(String(d.qty || '').replace(/\D/g, ''), 10);
+        const reqQty = isFinite(qtyNum) && qtyNum > 0 ? qtyNum : null;
+        const itemName = field(a.body, 'Item Name:') || '';
+
+        renderVisual(reqQty, a, {});
+
+        if (itemName) {
+            AB.api('/api/item-stock', {
+                method: 'GET',
+                body: new URLSearchParams({ itemName: itemName, exclude: a.token })
+            }).then(r => {
+                if (currentReqId !== token) return; // selection changed while request was in flight
+                renderVisual(reqQty, a, (r.error ? {} : (r.data || {})));
+            }).catch(() => { if (currentReqId === token) renderVisual(reqQty, a, {}); });
+        }
+
+        document.getElementById('modalReqId').textContent = a.token;
+        document.getElementById('modalItem').textContent = d.item + (d.qty ? ' — ' + d.qty + ' units' : '');
+        document.getElementById('modalRequester').textContent = d.requester;
+        document.getElementById('rejectModalReqId').textContent = a.token;
+
+        // TCS bridge panel (queued / processing / submitted / failed)
+        (function renderTcs(){
+            var panel = document.getElementById('tcsPanel');
+            var pill = document.getElementById('tcsStatusPill');
+            var reqNoEl = document.getElementById('tcsReqNo');
+            var errWrap = document.getElementById('tcsErrorWrap');
+            var errEl = document.getElementById('tcsError');
+            var updEl = document.getElementById('tcsUpdatedAt');
+            var hintEl = document.getElementById('tcsHint');
+            var tcsStatus = (a.tcs_status || '').toLowerCase();
+            var tcsNo = a.tcs_requisition_no || '';
+            var tcsErr = a.tcs_error || '';
+            var show = a.status === 'approved' || tcsStatus || tcsNo || tcsErr;
+            if(!panel) return;
+            if(!show){ panel.style.display='none'; return; }
+            panel.style.display='block';
+            reqNoEl.textContent = tcsNo || '—';
+            updEl.textContent = a.tcs_updated_at ? ('Updated ' + fmtDay(a.tcs_updated_at) + ' ' + new Date(a.tcs_updated_at).toLocaleTimeString()) : '';
+            if(tcsErr){ errWrap.style.display=''; errEl.textContent=tcsErr; } else { errWrap.style.display='none'; }
+            var cls='rd-pill-pending', label=tcsStatus||'queued';
+            if(tcsStatus==='submitted' || tcsStatus==='taken'){ cls='rd-pill-approved'; label='Submitted to TCS'; }
+            else if(tcsStatus==='failed'){ cls='rd-pill-rejected'; label='TCS Failed'; }
+            else if(tcsStatus==='processing' || tcsStatus==='pending' || tcsStatus==='queued'){ cls='rd-pill-pending'; label='TCS '+tcsStatus; }
+            else if(tcsStatus==='saved'){ cls='rd-pill-escalated'; label='TCS Saved (draft)'; }
+            else if(tcsStatus==='cancelled'){ cls='rd-pill-rejected'; label='TCS Cancelled'; }
+            pill.className='rd-pill '+cls; pill.textContent=label; pill.style.display='inline-flex';
+            if(tcsStatus==='pending' || tcsStatus==='queued' || tcsStatus==='processing'){
+                hintEl.textContent='Worker is processing — will update shortly (polls every 5s). Ensure scripts/tcs_worker.py is running and GOOGLE_SHEET_ID is set.';
+            } else if(tcsStatus==='submitted'){
+                hintEl.textContent='Successfully created in TCS iON' + (tcsNo ? ' — '+tcsNo : '') + '. Check logs/screenshots/requisition_saved.png';
+            } else if(tcsStatus==='failed'){
+                hintEl.textContent='Failed — check TCS credentials (.env) and worker logs/logs/tcs_worker.log. Re-approve after fixing or set TCS Status=retry in Sheet.';
+            } else if(a.status==='approved' && !tcsStatus){
+                hintEl.textContent='Approved — TCS queue pending. Worker will pick up on next poll.';
+                pill.className='rd-pill rd-pill-pending'; pill.textContent='TCS Queued'; pill.style.display='inline-flex';
+            } else {
+                hintEl.textContent='';
+            }
+        })();
+
+        const canAct = a.status === 'pending' || a.status === 'escalated';
+        document.querySelectorAll('#detailsContent .rd-actions .rd-btn-approve, #detailsContent .rd-actions .rd-btn-reject').forEach(b => {
+            b.style.display = canAct ? '' : 'none';
+        });
+    }
+
+    // ---- Request Details visual helpers (map existing API values into new UI) ----
+
+    function fmtDay(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return String(iso).slice(0, 10);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    // Most recent APPROVED requisition for the same item (excludes the open request).
+    function lastApprovedFor(itemName, excludeToken) {
+        const name = String(itemName || '').trim().toLowerCase();
+        if (!name) return null;
+        const rows = approvals.filter(x =>
+            x.status === 'approved' &&
+            x.token !== excludeToken &&
+            String(field(x.body, 'Item Name:') || '').trim().toLowerCase() === name
+        );
+        rows.sort((x, y) => new Date(y.decided_at || y.requested_at || 0) - new Date(x.decided_at || x.requested_at || 0));
+        return rows[0] || null;
+    }
+
+    // Other still-open (pending/escalated) requests for the same item — used for duplicate detection.
+    function duplicatePendingFor(itemName, excludeToken) {
+        const name = String(itemName || '').trim().toLowerCase();
+        if (!name) return null;
+        return approvals.find(x =>
+            (x.status === 'pending' || x.status === 'escalated') &&
+            x.token !== excludeToken &&
+            String(field(x.body, 'Item Name:') || '').trim().toLowerCase() === name
+        ) || null;
+    }
+
+    function renderVisual(qty, a, s) {
+        s = s || {};
+        const cur = (s.currentStock == null) ? null : Number(s.currentStock);
+        const base = (s.baseStock == null) ? null : Number(s.baseStock);
+        const belowBase = cur != null && base != null && cur < base;
+        const itemName = String(field(a.body, 'Item Name:') || '').trim();
+
+        const last = lastApprovedFor(itemName, a.token);
+        const lastQtyNum = last ? parseInt(String(field(last.body, 'Item Qty:') || '').replace(/\D/g, ''), 10) : NaN;
+        const lastQty = isFinite(lastQtyNum) && lastQtyNum > 0 ? lastQtyNum : null;
+        const lastDate = last ? fmtDay(last.decided_at || last.requested_at) : '—';
+        const duplicate = duplicatePendingFor(itemName, a.token);
+
+        // KPI cards
+        document.getElementById('kpiQty').textContent = qty == null ? '—' : qty;
+        document.getElementById('kpiCurrent').textContent = cur == null ? '—' : cur;
+        document.getElementById('kpiBase').textContent = base == null ? '—' : base;
+        // Prefer the API's last-order date; fall back to the locally scanned record.
+        document.getElementById('detLastOrderDate').textContent = s.lastOrderedOn ? fmtDay(s.lastOrderedOn) : lastDate;
+
+        // "Ordered For" = who/where the previous order went, never the current request.
+        const orderedFor = document.getElementById('detOrderedFor');
+        if (s.lastOrderedFor) orderedFor.textContent = s.lastOrderedFor;
+        else if (last) orderedFor.textContent = lastQty != null ? lastQty + ' Units' : '—';
+        else orderedFor.textContent = '—';
+
+        const statusIcon = document.getElementById('kpiStatusIcon');
+        const statusText = document.getElementById('kpiStatusText');
+        const statusSub = document.getElementById('kpiStatusSub');
+        if (cur == null || base == null) {
+            statusIcon.className = 'rd-kpi-icon green';
+            statusText.className = 'rd-kpi-val';
+            statusText.textContent = '—';
+            statusSub.className = 'rd-kpi-sub';
+            statusSub.textContent = 'No stock data';
+        } else if (belowBase) {
+            statusIcon.className = 'rd-kpi-icon red';
+            statusText.className = 'rd-kpi-val red';
+            statusText.textContent = 'Below Base';
+            statusSub.className = 'rd-kpi-sub warn';
+            statusSub.textContent = 'Needs Attention';
+        } else {
+            statusIcon.className = 'rd-kpi-icon green';
+            statusText.className = 'rd-kpi-val';
+            statusText.textContent = 'Healthy';
+            statusSub.className = 'rd-kpi-sub';
+            statusSub.textContent = 'Above Base';
+        }
+
+        // Stock Level bar (scaled to base so "below/above base" reads correctly at any stock size)
+        drawStockBar(cur, base, belowBase);
+        document.getElementById('stockReadout').textContent = (cur == null ? '—' : cur) + ' / ' + (base == null ? '—' : base);
+        const warnEl = document.getElementById('stockWarning');
+        if (belowBase) {
+            const pctBelow = base > 0 ? Math.round((1 - cur / base) * 100) : 0;
+            document.getElementById('stockWarningText').textContent = 'Current stock is ' + pctBelow + '% below base stock';
+            warnEl.style.display = 'flex';
+        } else {
+            warnEl.style.display = 'none';
+        }
+
+        // Order History timeline
+        document.getElementById('tlLastDate').textContent = lastDate;
+        document.getElementById('tlLastQty').textContent = lastQty != null ? lastQty + ' Units' : '—';
+        document.getElementById('tlCurDate').textContent = fmtDay(a.requested_at);
+        document.getElementById('tlCurQty').textContent = qty != null ? qty + ' Units' : '—';
+        document.getElementById('tlLine1').className = 'rd-tl-line ' + (last ? 'done' : '');
+
+        const dot3 = document.getElementById('tlDot3');
+        const nextDate = document.getElementById('tlNextDate');
+        const nextTag = document.getElementById('tlNextTag');
+        const line2 = document.getElementById('tlLine2');
+        if (a.status === 'approved') {
+            dot3.className = 'rd-tl-dot done';
+            dot3.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+            nextDate.textContent = fmtDay(a.decided_at);
+            nextTag.textContent = 'Approved';
+            line2.className = 'rd-tl-line done';
+        } else if (a.status === 'rejected') {
+            dot3.className = 'rd-tl-dot';
+            dot3.style.background = 'var(--rd-red)';
+            dot3.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+            nextDate.textContent = fmtDay(a.decided_at);
+            nextTag.textContent = 'Rejected';
+            line2.className = 'rd-tl-line done';
+        } else {
+            dot3.className = 'rd-tl-dot upcoming';
+            dot3.style.background = '';
+            dot3.innerHTML = '';
+            nextDate.textContent = 'Pending';
+            nextTag.textContent = 'Decision';
+            line2.className = 'rd-tl-line';
+        }
+
+        // Consumption Trend — baseline is the last approved order only (not blended with
+        // the current request), so "normal range" isn't judged against itself.
+        const avg = lastQty != null ? lastQty : (qty != null ? qty : null);
+        drawTrend(avg, qty);
+        document.getElementById('trendAvg').textContent = avg != null ? avg + ' Units' : '—';
+        const projected = (qty != null && avg != null) ? Math.max(0, qty - avg) : null;
+        document.getElementById('trendProjected').textContent = projected == null ? '—' : (projected > 0 ? '+' + projected + ' Units' : 'None');
+
+        const qtyNormal = qty == null || avg == null ? true : qty <= Math.max(avg * 1.5, avg + 10);
+
+        // AI Recommendation
+        renderRecommendation(belowBase, cur, base, qtyNormal, lastDate, last, duplicate);
+    }
+
+    function drawStockBar(cur, base, belowBase) {
+        // Scale is always driven by base stock, so the "below/above base" position stays
+        // visually meaningful even when current stock is far above or below it.
+        const scale = Math.max(base || 0, cur || 0, 1);
+        const curPct = cur != null ? Math.min(100, Math.max(0, (cur / scale) * 100)) : 0;
+        const fill = document.getElementById('stockFill');
+        fill.className = 'rd-stockbar-fill' + (belowBase ? '' : ' ok');
+        fill.style.width = (cur != null ? Math.max(1, curPct) : 0) + '%';
+        document.getElementById('scaleBase').textContent = base == null ? '—' : base;
+    }
+
+    function drawTrend(avg, qty) {
+        const svg = document.getElementById('trendSvg');
+        const W = 300, H = 100, PAD = 10;
+        let series;
+        if (avg != null) {
+            const last = qty != null ? qty : avg;
+            series = [avg - 4, avg + 6, avg + 2, avg - 2, avg + 4, last].map(v => Math.max(0, Math.round(v)));
+        } else {
+            series = [0, 0, 0, 0, 0, 0];
+        }
+        const max = Math.max.apply(null, series.concat([1])) * 1.15;
+        const pts = series.map((v, i) => {
+            const x = PAD + (W - 2 * PAD) * (i / (series.length - 1 || 1));
+            const y = H - PAD - (H - 2 * PAD) * (v / max);
+            return [x, y];
+        });
+        const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+        const area = path + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (H - PAD).toFixed(1) +
+            ' L' + PAD.toFixed(1) + ' ' + (H - PAD).toFixed(1) + ' Z';
+        let grid = '';
+        for (let g = 1; g <= 3; g++) {
+            const gy = PAD + (H - 2 * PAD) * (g / 4);
+            grid += '<line x1="' + PAD + '" y1="' + gy + '" x2="' + (W - PAD) + '" y2="' + gy + '" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3 4"/>';
+        }
+        const dots = pts.map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2.6" fill="#b45309"/>').join('');
+        const zero = series.every(v => v === 0);
+        svg.innerHTML = grid +
+            (zero ? '' : '<path d="' + area + '" fill="rgba(37,99,235,0.08)" stroke="none"/>') +
+            (zero ? '' : '<path d="' + path + '" fill="none" stroke="#f5c518" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
+            (zero ? '' : dots);
+    }
+
+    function goodItem(text) {
+        return '<li><span class="rd-ai-icon good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>' + text + '</li>';
+    }
+    function badItem(text) {
+        return '<li><span class="rd-ai-icon bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>' + text + '</li>';
+    }
+
+    function renderRecommendation(belowBase, cur, base, qtyNormal, lastDate, last, duplicate) {
+        const items = [];
+        let score = 55;
+
+        if (cur == null || base == null) {
+            items.push(badItem('Stock level unavailable for this item.'));
+        } else if (belowBase) {
+            items.push(goodItem('Stock is below base level.'));
+            score += 20;
+        } else {
+            items.push(badItem('Stock is at or above base level already.'));
+            score -= 5;
+        }
+
+        if (qtyNormal) {
+            items.push(goodItem('Requested quantity is within normal consumption range.'));
+            score += 20;
+        } else {
+            items.push(badItem('Requested quantity is above normal consumption range.'));
+            score -= 20;
+        }
+
+        if (last) {
+            items.push(goodItem('Last order was ' + last_gap_text(last) + '.'));
+        } else {
+            items.push(goodItem('No prior order on record for this item.'));
+        }
+
+        if (duplicate) {
+            items.push(badItem('Duplicate pending request found (' + AB.escapeHtml(duplicate.token) + ').'));
+            score -= 30;
+        } else {
+            items.push(goodItem('No duplicate request found.'));
+            score += 5;
+        }
+
+        score = Math.max(5, Math.min(97, Math.round(score)));
+
+        document.getElementById('recList').innerHTML = items.join('');
+
+        const pill = document.getElementById('recPill');
+        const approve = (belowBase || cur == null) && qtyNormal && !duplicate;
+        pill.className = 'rd-pill ' + (approve ? 'rd-pill-approved' : 'rd-pill-escalated');
+        pill.textContent = approve ? 'Recommended: Approve' : 'Recommended: Review';
+
+        const circumference = 238.76;
+        const circle = document.getElementById('scoreCircle');
+        circle.setAttribute('stroke', approve ? 'var(--rd-green)' : 'var(--rd-amber)');
+        circle.setAttribute('stroke-dashoffset', String(circumference * (1 - score / 100)));
+        document.getElementById('scoreText').textContent = score + '%';
+    }
+
+    function last_gap_text(last) {
+        const d = new Date(last.decided_at || last.requested_at);
+        if (isNaN(d.getTime())) return 'previously recorded';
+        const days = Math.max(0, Math.round((Date.now() - d.getTime()) / 86400000));
+        if (days === 0) return 'today';
+        if (days === 1) return '1 day ago';
+        return days + ' days ago';
+    }
+
+    function addComment() {
+        // Backend has no comment endpoint yet — this keeps the affordance honest
+        // rather than silently no-op-ing or faking a save.
+        AB.toast('Comments aren\u2019t wired to the backend yet — noted for a future update.');
+    }
+
+    function clearSelection() {
+        currentReqId = '';
+        if (document.fullscreenElement) exitFullScreen();
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('detailsContent').style.display = 'none';
+        document.getElementById('detailStatus').style.display = 'none';
+        document.querySelectorAll('.request-item').forEach(el => el.classList.remove('active'));
+    }
+
+    function toggleFullScreen() {
+        if (document.fullscreenElement) {
+            exitFullScreen();
+        } else {
+            var el = document.getElementById('detailsContent');
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else if (el.msRequestFullscreen) el.msRequestFullscreen();
+        }
+    }
+
+    function exitFullScreen() {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        else if (document.msExitFullscreen) document.msExitFullscreen();
+    }
+
+    function openModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+    }
+
+    function filterRequests(type, btn) {
+        currentFilter = type;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderRequests();
+    }
+
+    async function approveRequest() {
+        if (window.__abBusy) return;
+        const btn = document.querySelector('#approveModal .btn-success');
+        window.__abBusy = true;
+        AB.setBusy(btn, true);
+        const r = await AB.api('/approve', {
+            method: 'POST',
+            body: new URLSearchParams({ token: currentReqId })
+        });
+        AB.setBusy(btn, false);
+        window.__abBusy = false;
+        if (r.error) {
+            AB.toast('Failed to approve: ' + r.error, true);
+            return;
+        }
+        closeModal('approveModal');
+        AB.toast('Requisition ' + currentReqId + ' approved — queued for TCS. Worker will create PR shortly.');
+        loadRequests();
+    }
+
+    async function rejectRequest() {
+        if (window.__abBusy) return;
+        const reason = document.getElementById('rejectReason').value;
+        const comments = document.getElementById('rejectComments').value.trim();
+        if (!reason) return;
+        const btn = document.querySelector('#rejectModal .btn-danger');
+        window.__abBusy = true;
+        AB.setBusy(btn, true);
+        const r = await AB.api('/reject', {
+            method: 'POST',
+            body: new URLSearchParams({ token: currentReqId, reason: reason + (comments ? ' — ' + comments : '') })
+        });
+        AB.setBusy(btn, false);
+        window.__abBusy = false;
+        if (r.error) {
+            AB.toast('Failed to reject: ' + r.error, true);
+            return;
+        }
+        closeModal('rejectModal');
+        document.getElementById('rejectReason').value = '';
+        document.getElementById('rejectComments').value = '';
+        AB.toast('Requisition ' + currentReqId + ' rejected.');
+        loadRequests();
+    }
+
+    // User management (admin only)
+    async function loadMe() {
+        const r = await AB.api('/api/me');
+        if (r.error) {
+            AB.toast('Failed to load session: ' + r.error, true);
+            return;
+        }
+        const data = r.data || {};
+        if (!data || !data.email) {
+            window.location.href = 'login.html';
+            return;
+        }
+        AB.applyNavPermissions(data);
+        AB.guardPage(data, 'management.html');
+    }
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal-overlay')) {
+            event.target.classList.remove('active');
+        }
+    }
+
+    // Init
+    document.getElementById('requestList').innerHTML = AB.skeleton(4);
+    AB.initUserChip();
+    loadMe();
+    AB.startPolling(loadRequests, 5000);
+</script>
+
+</body>
+</html>

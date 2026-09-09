@@ -1,0 +1,714 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { getSql, type Sql } from "@/lib/db";
+import {
+  type InventoryRow,
+  type Item,
+  type Machine,
+  type MachineStat,
+  type RefillRow,
+  type Slip,
+  type SlipStatus,
+  type WeekPoint,
+  stockStatus,
+} from "@/lib/plant";
+
+type ItemRow = {
+  id: number;
+  code: string;
+  name: string;
+  uom: string;
+  reorder_level: number;
+  qty: number;
+};
+
+type MachineRow = {
+  id: number;
+  code: string;
+  name: string;
+  line: string;
+};
+
+type SlipRow = {
+  id: number;
+  token: string;
+  item_id: number;
+  item_name: string;
+  item_code: string;
+  uom: string;
+  machine_id: number | null;
+  machine_name: string | null;
+  machine_code: string | null;
+  qty: number;
+  issued_qty: number;
+  department: string;
+  station: string;
+  hod_title: string;
+  hod_confirmed: boolean;
+  slip_date: string;
+  status: SlipStatus;
+  note: string;
+  created_at: string;
+  decided_at: string | null;
+  on_hand: number;
+  reorder_level: number;
+};
+
+let seedLock: Promise<void> | null = null;
+
+export async function ensureSeed(sql: Sql): Promise<void> {
+  if (seedLock) return seedLock;
+  seedLock = (async () => {
+    const [{ n }] = await sql<{ n: number }>`select count(*)::int as n from items`;
+    if (n > 0) return;
+
+    const catalog: Array<[string, string, string, number, number]> = [
+      ["HYD-040", "Hydraulic Oil ISO 68", "Ltr", 20, 4],
+      ["CUT-118", "Carbide Cutting Insert", "Pcs", 12, 0],
+      ["GLV-NIT", "Nitrile Safety Gloves", "Pair", 40, 126],
+      ["BRG-6205", "Bearing 6205-2RS", "Pcs", 10, 8],
+      ["BLT-B52", "V-Belt B-52", "Pcs", 6, 2],
+      ["CLN-CON", "Coolant Concentrate", "Ltr", 25, 48],
+      ["FLT-C10", "Compressor Filter C10", "Pcs", 4, 0],
+      ["WLD-6013", "Welding Electrode 6013", "Kg", 30, 210],
+      ["PNE-8MM", "Pneumatic Fitting 8mm", "Pcs", 16, 18],
+      ["GRS-NL2", "Grease NLGI-2", "Kg", 8, 3],
+    ];
+    for (const [code, name, uom, reorder, qty] of catalog) {
+      await sql`
+        insert into items (code, name, uom, reorder_level, qty)
+        values (${code}, ${name}, ${uom}, ${reorder}, ${qty})
+      `;
+    }
+
+    const plant: Array<[string, string, string]> = [
+      ["CNC-01", "CNC Lathe 01", "Machine shop"],
+      ["CNC-02", "CNC Mill 02", "Machine shop"],
+      ["PRS-04", "Hydraulic Press 04", "Press bay"],
+      ["CNV-A", "Conveyor Line A", "Assembly"],
+      ["WLD-2", "Welding Bay 2", "Fabrication"],
+      ["CMP-R", "Compressor Room", "Utilities"],
+    ];
+    for (const [code, name, line] of plant) {
+      await sql`insert into machines (code, name, line) values (${code}, ${name}, ${line})`;
+    }
+
+    const items = await sql<ItemRow>`select * from items`;
+    const machines = await sql<MachineRow>`select * from machines`;
+    const byCode = (code: string) => items.find((i) => i.code === code)!;
+    const byMc = (code: string) => machines.find((m) => m.code === code)!;
+
+    type Hist = { item: string; machine: string; qty: number; daysAgo: number; kind: "issue" | "receive" };
+    const history: Hist[] = [
+      { item: "CUT-118", machine: "CNC-01", qty: -6, daysAgo: 58, kind: "issue" },
+      { item: "CUT-118", machine: "CNC-01", qty: 24, daysAgo: 55, kind: "receive" },
+      { item: "CUT-118", machine: "CNC-01", qty: -8, daysAgo: 41, kind: "issue" },
+      { item: "CUT-118", machine: "CNC-02", qty: -5, daysAgo: 33, kind: "issue" },
+      { item: "CUT-118", machine: "CNC-01", qty: -7, daysAgo: 18, kind: "issue" },
+      { item: "CUT-118", machine: "CNC-02", qty: -4, daysAgo: 9, kind: "issue" },
+      { item: "HYD-040", machine: "PRS-04", qty: 40, daysAgo: 52, kind: "receive" },
+      { item: "HYD-040", machine: "PRS-04", qty: -8, daysAgo: 47, kind: "issue" },
+      { item: "HYD-040", machine: "PRS-04", qty: -10, daysAgo: 29, kind: "issue" },
+      { item: "HYD-040", machine: "PRS-04", qty: -6, daysAgo: 12, kind: "issue" },
+      { item: "HYD-040", machine: "CMP-R", qty: -4, daysAgo: 6, kind: "issue" },
+      { item: "GLV-NIT", machine: "WLD-2", qty: 80, daysAgo: 44, kind: "receive" },
+      { item: "GLV-NIT", machine: "WLD-2", qty: -20, daysAgo: 38, kind: "issue" },
+      { item: "GLV-NIT", machine: "CNV-A", qty: -16, daysAgo: 21, kind: "issue" },
+      { item: "GLV-NIT", machine: "CNC-01", qty: -12, daysAgo: 8, kind: "issue" },
+      { item: "BRG-6205", machine: "CNV-A", qty: 20, daysAgo: 49, kind: "receive" },
+      { item: "BRG-6205", machine: "CNV-A", qty: -6, daysAgo: 36, kind: "issue" },
+      { item: "BRG-6205", machine: "CNC-02", qty: -4, daysAgo: 14, kind: "issue" },
+      { item: "BLT-B52", machine: "CNV-A", qty: 10, daysAgo: 40, kind: "receive" },
+      { item: "BLT-B52", machine: "CNV-A", qty: -4, daysAgo: 27, kind: "issue" },
+      { item: "BLT-B52", machine: "CNV-A", qty: -3, daysAgo: 11, kind: "issue" },
+      { item: "CLN-CON", machine: "CNC-01", qty: 60, daysAgo: 50, kind: "receive" },
+      { item: "CLN-CON", machine: "CNC-01", qty: -12, daysAgo: 31, kind: "issue" },
+      { item: "CLN-CON", machine: "CNC-02", qty: -10, daysAgo: 16, kind: "issue" },
+      { item: "FLT-C10", machine: "CMP-R", qty: 8, daysAgo: 46, kind: "receive" },
+      { item: "FLT-C10", machine: "CMP-R", qty: -2, daysAgo: 28, kind: "issue" },
+      { item: "FLT-C10", machine: "CMP-R", qty: -2, daysAgo: 7, kind: "issue" },
+      { item: "WLD-6013", machine: "WLD-2", qty: 100, daysAgo: 53, kind: "receive" },
+      { item: "WLD-6013", machine: "WLD-2", qty: -25, daysAgo: 34, kind: "issue" },
+      { item: "WLD-6013", machine: "WLD-2", qty: -18, daysAgo: 13, kind: "issue" },
+      { item: "PNE-8MM", machine: "CNC-02", qty: 30, daysAgo: 42, kind: "receive" },
+      { item: "PNE-8MM", machine: "CNC-02", qty: -8, daysAgo: 22, kind: "issue" },
+      { item: "GRS-NL2", machine: "PRS-04", qty: 12, daysAgo: 39, kind: "receive" },
+      { item: "GRS-NL2", machine: "PRS-04", qty: -4, daysAgo: 19, kind: "issue" },
+      { item: "GRS-NL2", machine: "CNV-A", qty: -3, daysAgo: 5, kind: "issue" },
+    ];
+
+    for (const h of history) {
+      const item = byCode(h.item);
+      const mc = byMc(h.machine);
+      await sql`
+        insert into movements (item_id, machine_id, qty, kind, created_at)
+        values (
+          ${item.id},
+          ${mc.id},
+          ${h.qty},
+          ${h.kind},
+          now() - (${h.daysAgo}::int * interval '1 day')
+        )
+      `;
+    }
+
+    async function insertSlip(opts: {
+      token: string;
+      item: string;
+      machine: string;
+      qty: number;
+      dept: string;
+      station: string;
+      hod: string;
+      daysAgo: number;
+      status?: SlipStatus;
+      issued?: number;
+      note?: string;
+    }) {
+      const item = byCode(opts.item);
+      const mc = byMc(opts.machine);
+      const status = opts.status ?? "pending";
+      const issued = opts.issued ?? 0;
+      await sql`
+        insert into slips (
+          token, item_id, machine_id, qty, issued_qty, department, station,
+          hod_title, hod_confirmed, slip_date, status, note, created_at, decided_at
+        ) values (
+          ${opts.token},
+          ${item.id},
+          ${mc.id},
+          ${opts.qty},
+          ${issued},
+          ${opts.dept},
+          ${opts.station},
+          ${opts.hod},
+          true,
+          (current_date - ${opts.daysAgo}::int),
+          ${status},
+          ${opts.note ?? ""},
+          now() - (${opts.daysAgo}::int * interval '1 day'),
+          null
+        )
+      `;
+      if (status !== "pending") {
+        await sql`
+          update slips
+          set decided_at = created_at + interval '3 hours'
+          where token = ${opts.token}
+        `;
+      }
+    }
+
+    await insertSlip({
+      token: "SLIP-2609-0001",
+      item: "CUT-118",
+      machine: "CNC-01",
+      qty: 6,
+      dept: "Production",
+      station: "Lathe cell",
+      hod: "Production HOD",
+      daysAgo: 0,
+    });
+    await insertSlip({
+      token: "SLIP-2609-0002",
+      item: "HYD-040",
+      machine: "PRS-04",
+      qty: 10,
+      dept: "Maintenance",
+      station: "Press bay",
+      hod: "Maintenance HOD",
+      daysAgo: 0,
+    });
+    await insertSlip({
+      token: "SLIP-2609-0003",
+      item: "GLV-NIT",
+      machine: "WLD-2",
+      qty: 20,
+      dept: "Production",
+      station: "Fabrication",
+      hod: "Production HOD",
+      daysAgo: 0,
+    });
+    await insertSlip({
+      token: "SLIP-2609-0004",
+      item: "BRG-6205",
+      machine: "CNV-A",
+      qty: 12,
+      dept: "Maintenance",
+      station: "Assembly",
+      hod: "Maintenance HOD",
+      daysAgo: 1,
+    });
+    await insertSlip({
+      token: "SLIP-2609-0005",
+      item: "FLT-C10",
+      machine: "CMP-R",
+      qty: 2,
+      dept: "Maintenance",
+      station: "Utilities",
+      hod: "Maintenance HOD",
+      daysAgo: 1,
+    });
+    await insertSlip({
+      token: "SLIP-2609-0006",
+      item: "WLD-6013",
+      machine: "WLD-2",
+      qty: 15,
+      dept: "Production",
+      station: "Fabrication",
+      hod: "Production HOD",
+      daysAgo: 2,
+      status: "issued",
+      issued: 15,
+    });
+  })().catch((err) => {
+    seedLock = null;
+    throw err;
+  });
+  return seedLock;
+}
+
+function mapItem(r: ItemRow): Item {
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    uom: r.uom,
+    reorderLevel: r.reorder_level,
+    qty: r.qty,
+  };
+}
+
+function mapMachine(r: MachineRow): Machine {
+  return { id: r.id, code: r.code, name: r.name, line: r.line };
+}
+
+function mapSlip(r: SlipRow): Slip {
+  return {
+    id: r.id,
+    token: r.token,
+    itemId: r.item_id,
+    itemName: r.item_name,
+    itemCode: r.item_code,
+    uom: r.uom,
+    machineId: r.machine_id,
+    machineName: r.machine_name,
+    machineCode: r.machine_code,
+    qty: r.qty,
+    issuedQty: r.issued_qty,
+    department: r.department,
+    station: r.station,
+    hodTitle: r.hod_title,
+    hodConfirmed: r.hod_confirmed,
+    slipDate: r.slip_date,
+    status: r.status,
+    note: r.note,
+    createdAt: String(r.created_at),
+    decidedAt: r.decided_at ? String(r.decided_at) : null,
+    onHand: r.on_hand,
+    reorderLevel: r.reorder_level,
+  };
+}
+
+const SLIP_SELECT = `
+  select
+    s.id, s.token, s.item_id, i.name as item_name, i.code as item_code, i.uom,
+    s.machine_id, m.name as machine_name, m.code as machine_code,
+    s.qty, s.issued_qty, s.department, s.station, s.hod_title, s.hod_confirmed,
+    s.slip_date::text as slip_date, s.status, s.note,
+    s.created_at::text as created_at, s.decided_at::text as decided_at,
+    i.qty as on_hand, i.reorder_level
+  from slips s
+  join items i on i.id = s.item_id
+  left join machines m on m.id = s.machine_id
+`;
+
+export const getCatalog = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  await ensureSeed(sql);
+  const items = await sql<ItemRow>`select * from items order by name`;
+  const machines = await sql<MachineRow>`select * from machines order by code`;
+  return { items: items.map(mapItem), machines: machines.map(mapMachine) };
+});
+
+export const listSlips = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  await ensureSeed(sql);
+  const rows = await sql.query<SlipRow>(`${SLIP_SELECT} order by s.created_at desc`);
+  return rows.map(mapSlip);
+});
+
+export const getItemHint = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      itemId: z.number(),
+      machineId: z.number().nullable(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    await ensureSeed(sql);
+    const [item] = await sql<ItemRow>`select * from items where id = ${data.itemId}`;
+    if (!item) return null;
+    const last = await sql<{
+      qty: number;
+      created_at: string;
+      machine_name: string | null;
+      kind: string;
+    }>`
+      select mv.qty, mv.created_at::text as created_at, m.name as machine_name, mv.kind
+      from movements mv
+      left join machines m on m.id = mv.machine_id
+      where mv.item_id = ${data.itemId} and mv.kind = 'issue'
+      order by mv.created_at desc
+      limit 3
+    `;
+    const machineLast = data.machineId
+      ? await sql<{ qty: number; created_at: string }>`
+          select qty, created_at::text as created_at
+          from movements
+          where item_id = ${data.itemId} and machine_id = ${data.machineId} and kind = 'issue'
+          order by created_at desc
+          limit 1
+        `
+      : [];
+    return {
+      item: mapItem(item),
+      lastIssues: last.map((r) => ({
+        qty: Math.abs(r.qty),
+        at: r.created_at,
+        machineName: r.machine_name,
+      })),
+      lastOnThisMachine: machineLast[0]
+        ? { qty: Math.abs(machineLast[0].qty), at: machineLast[0].created_at }
+        : null,
+    };
+  });
+
+export const raiseSlip = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      itemId: z.number(),
+      machineId: z.number(),
+      qty: z.number().int().positive(),
+      department: z.string().min(1),
+      station: z.string().max(80),
+      hodTitle: z.string().min(1),
+      hodConfirmed: z.boolean(),
+      slipDate: z.string().min(8),
+    }),
+  )
+  .handler(async ({ data }) => {
+    if (!data.hodConfirmed) {
+      throw new Error("HOD authorisation is required — same as signing the paper slip.");
+    }
+    const sql = await getSql();
+    await ensureSeed(sql);
+    const [item] = await sql<ItemRow>`select * from items where id = ${data.itemId}`;
+    const [machine] = await sql<MachineRow>`select * from machines where id = ${data.machineId}`;
+    if (!item || !machine) throw new Error("Unknown item or machine.");
+    const [{ n }] = await sql<{ n: number }>`select count(*)::int as n from slips`;
+    const now = new Date();
+    const token = `SLIP-${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}-${String(n + 1).padStart(4, "0")}`;
+    const [ins] = await sql<{ token: string }>`
+      insert into slips (
+        token, item_id, machine_id, qty, department, station,
+        hod_title, hod_confirmed, slip_date, status
+      ) values (
+        ${token}, ${item.id}, ${machine.id}, ${data.qty}, ${data.department},
+        ${data.station}, ${data.hodTitle}, true, ${data.slipDate}::date, 'pending'
+      ) returning token
+    `;
+    const [row] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.token = $1`, [ins.token]);
+    return mapSlip(row);
+  });
+
+export const decideSlip = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.number(),
+      mode: z.enum(["stock", "split", "pr"]),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    await ensureSeed(sql);
+    const [slip] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.id = $1`, [data.id]);
+    if (!slip) throw new Error("Slip not found.");
+    if (slip.status !== "pending") throw new Error("This slip has already been actioned.");
+
+    if (data.mode === "pr") {
+      await sql`
+        update slips
+        set status = 'pr_open', decided_at = now(), note = 'Raised PR — nothing issued from rack'
+        where id = ${slip.id}
+      `;
+      const [out] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);
+      return mapSlip(out);
+    }
+
+    const want = data.mode === "stock" ? slip.qty : Math.min(slip.qty, slip.on_hand);
+    if (want <= 0) throw new Error("No stock to issue.");
+    if (data.mode === "stock" && slip.on_hand < slip.qty) {
+      throw new Error("Not enough on the rack for a full issue. Use split or raise PR.");
+    }
+
+    const taken = await sql<{ id: number; qty: number }>`
+      update items
+      set qty = qty - ${want}
+      where id = ${slip.item_id} and qty >= ${want}
+      returning id, qty
+    `;
+    if (!taken[0]) throw new Error("Stock moved while deciding — refresh and try again.");
+
+    await sql`
+      insert into movements (item_id, machine_id, slip_id, qty, kind)
+      values (${slip.item_id}, ${slip.machine_id}, ${slip.id}, ${-want}, 'issue')
+    `;
+
+    const remaining = slip.qty - want;
+    const status: SlipStatus = remaining > 0 ? "partial" : "issued";
+    const note =
+      remaining > 0
+        ? `Issued ${want} from stock. PR open for ${remaining}.`
+        : `Issued ${want} from stock. No PR.`;
+    await sql`
+      update slips
+      set issued_qty = ${want}, status = ${status}, decided_at = now(), note = ${note}
+      where id = ${slip.id}
+    `;
+    const [out] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);
+    return mapSlip(out);
+  });
+
+export const receiveSlip = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.number() }))
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    await ensureSeed(sql);
+    const [slip] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.id = $1`, [data.id]);
+    if (!slip) throw new Error("Slip not found.");
+    if (slip.status !== "pr_open" && slip.status !== "partial") {
+      throw new Error("Only open PRs can be marked received.");
+    }
+    const inbound = slip.qty - slip.issued_qty;
+    if (inbound <= 0) throw new Error("Nothing left to receive.");
+    await sql`update items set qty = qty + ${inbound} where id = ${slip.item_id}`;
+    await sql`
+      insert into movements (item_id, machine_id, slip_id, qty, kind)
+      values (${slip.item_id}, ${slip.machine_id}, ${slip.id}, ${inbound}, 'receive')
+    `;
+    await sql`
+      update slips
+      set status = 'received', decided_at = now(),
+          note = ${`Received ${inbound} against PR. Rack updated.`}
+      where id = ${slip.id}
+    `;
+    const [out] = await sql.query<SlipRow>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);
+    return mapSlip(out);
+  });
+
+export const getInventory = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  await ensureSeed(sql);
+  const items = await sql<ItemRow>`select * from items order by name`;
+  const aggs = await sql<{
+    item_id: number;
+    consumed30: number;
+    received30: number;
+  }>`
+    select
+      item_id,
+      coalesce(sum(case when kind = 'issue' and created_at >= now() - interval '30 days' then -qty else 0 end), 0)::int as consumed30,
+      coalesce(sum(case when kind = 'receive' and created_at >= now() - interval '30 days' then qty else 0 end), 0)::int as received30
+    from movements
+    group by item_id
+  `;
+  const weekly = await sql<{ item_id: number; week: string; consumed: number }>`
+    select
+      item_id,
+      to_char(date_trunc('week', created_at), 'YYYY-MM-DD') as week,
+      coalesce(sum(case when kind = 'issue' then -qty else 0 end), 0)::int as consumed
+    from movements
+    where created_at >= now() - interval '56 days'
+    group by item_id, date_trunc('week', created_at)
+    order by week
+  `;
+  const aggMap = new Map(aggs.map((a) => [a.item_id, a]));
+  const weekMap = new Map<number, number[]>();
+  const weeks = lastNWeeks(8);
+  for (const w of weekly) {
+    const arr = weekMap.get(w.item_id) ?? weeks.map(() => 0);
+    const idx = weeks.indexOf(w.week);
+    if (idx >= 0) arr[idx] = w.consumed;
+    weekMap.set(w.item_id, arr);
+  }
+  const rows: InventoryRow[] = items.map((it) => {
+    const a = aggMap.get(it.id);
+    const consumed30 = a?.consumed30 ?? 0;
+    const received30 = a?.received30 ?? 0;
+    const daily = consumed30 / 30;
+    return {
+      ...mapItem(it),
+      status: stockStatus(it.qty, it.reorder_level),
+      consumed30,
+      received30,
+      daysCover: daily > 0 ? Math.round((it.qty / daily) * 10) / 10 : null,
+      weekly: weekMap.get(it.id) ?? weeks.map(() => 0),
+    };
+  });
+  return rows;
+});
+
+export const getMachineStats = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  await ensureSeed(sql);
+  const machines = await sql<MachineRow>`select * from machines order by code`;
+  const totals = await sql<{
+    machine_id: number;
+    consumed30: number;
+    distinct_items: number;
+  }>`
+    select
+      machine_id,
+      coalesce(sum(case when kind = 'issue' and created_at >= now() - interval '30 days' then -qty else 0 end), 0)::int as consumed30,
+      count(distinct case when kind = 'issue' then item_id end)::int as distinct_items
+    from movements
+    where machine_id is not null
+    group by machine_id
+  `;
+  const breakdown = await sql<{
+    machine_id: number;
+    item_name: string;
+    item_code: string;
+    uom: string;
+    qty: number;
+  }>`
+    select
+      mv.machine_id,
+      i.name as item_name,
+      i.code as item_code,
+      i.uom,
+      coalesce(sum(case when mv.kind = 'issue' then -mv.qty else 0 end), 0)::int as qty
+    from movements mv
+    join items i on i.id = mv.item_id
+    where mv.machine_id is not null
+    group by mv.machine_id, i.name, i.code, i.uom
+    having coalesce(sum(case when mv.kind = 'issue' then -mv.qty else 0 end), 0) > 0
+    order by qty desc
+  `;
+  const totMap = new Map(totals.map((t) => [t.machine_id, t]));
+  const byMc = new Map<number, MachineStat["rows"]>();
+  for (const b of breakdown) {
+    const list = byMc.get(b.machine_id) ?? [];
+    list.push({ itemName: b.item_name, itemCode: b.item_code, qty: b.qty, uom: b.uom });
+    byMc.set(b.machine_id, list);
+  }
+  const stats: MachineStat[] = machines.map((m) => {
+    const t = totMap.get(m.id);
+    const rows = byMc.get(m.id) ?? [];
+    return {
+      ...mapMachine(m),
+      consumed30: t?.consumed30 ?? 0,
+      distinctItems: t?.distinct_items ?? 0,
+      topItem: rows[0]?.itemName ?? null,
+      rows,
+    };
+  });
+  return stats;
+});
+
+export const getRefillDashboard = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  await ensureSeed(sql);
+  const items = await sql<ItemRow>`select * from items order by name`;
+  const aggs = await sql<{
+    item_id: number;
+    consumed30: number;
+    received30: number;
+    receipts: number;
+  }>`
+    select
+      item_id,
+      coalesce(sum(case when kind = 'issue' and created_at >= now() - interval '30 days' then -qty else 0 end), 0)::int as consumed30,
+      coalesce(sum(case when kind = 'receive' and created_at >= now() - interval '30 days' then qty else 0 end), 0)::int as received30,
+      coalesce(sum(case when kind = 'receive' and created_at >= now() - interval '30 days' then 1 else 0 end), 0)::int as receipts
+    from movements
+    group by item_id
+  `;
+  const weekly = await sql<{
+    week: string;
+    consumed: number;
+    received: number;
+  }>`
+    select
+      to_char(date_trunc('week', created_at), 'YYYY-MM-DD') as week,
+      coalesce(sum(case when kind = 'issue' then -qty else 0 end), 0)::int as consumed,
+      coalesce(sum(case when kind = 'receive' then qty else 0 end), 0)::int as received
+    from movements
+    where created_at >= now() - interval '56 days'
+    group by date_trunc('week', created_at)
+    order by week
+  `;
+  const perItemWeek = await sql<{ item_id: number; week: string; consumed: number }>`
+    select
+      item_id,
+      to_char(date_trunc('week', created_at), 'YYYY-MM-DD') as week,
+      coalesce(sum(case when kind = 'issue' then -qty else 0 end), 0)::int as consumed
+    from movements
+    where created_at >= now() - interval '56 days'
+    group by item_id, date_trunc('week', created_at)
+  `;
+  const weeks = lastNWeeks(8);
+  const aggMap = new Map(aggs.map((a) => [a.item_id, a]));
+  const weekMap = new Map<number, number[]>();
+  for (const w of perItemWeek) {
+    const arr = weekMap.get(w.item_id) ?? weeks.map(() => 0);
+    const idx = weeks.indexOf(w.week);
+    if (idx >= 0) arr[idx] = w.consumed;
+    weekMap.set(w.item_id, arr);
+  }
+  const rows: RefillRow[] = items.map((it) => {
+    const a = aggMap.get(it.id);
+    const consumed30 = a?.consumed30 ?? 0;
+    const received30 = a?.received30 ?? 0;
+    const daily = consumed30 / 30;
+    return {
+      itemId: it.id,
+      name: it.name,
+      code: it.code,
+      uom: it.uom,
+      qty: it.qty,
+      reorderLevel: it.reorder_level,
+      consumed30,
+      received30,
+      receipts: a?.receipts ?? 0,
+      daysCover: daily > 0 ? Math.round((it.qty / daily) * 10) / 10 : null,
+      weekly: weekMap.get(it.id) ?? weeks.map(() => 0),
+    };
+  });
+  const series: WeekPoint[] = weeks.map((week) => {
+    const hit = weekly.find((w) => w.week === week);
+    return { week, consumed: hit?.consumed ?? 0, received: hit?.received ?? 0 };
+  });
+  return { rows, series };
+});
+
+function lastNWeeks(n: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  // Monday of this week
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  for (let i = n - 1; i >= 0; i--) {
+    const x = new Date(d);
+    x.setDate(d.getDate() - i * 7);
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, "0");
+    const dd = String(x.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${dd}`);
+  }
+  return out;
+}

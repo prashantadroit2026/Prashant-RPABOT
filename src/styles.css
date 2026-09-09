@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --color-canvas: #f3f0e8;
+  --color-paper: #fbfaf6;
+  --color-ink: #1c1916;
+  --color-muted: #6f675c;
+  --color-brass: #6e470e;
+  --color-brass-soft: #f1e4c2;
+  --color-line: #ddd6c8;
+  --color-line-strong: #cfc6b4;
+  --color-ok: #1d6b3f;
+  --color-ok-soft: #dcece2;
+  --color-stop: #a61b14;
+  --color-stop-soft: #f6e0dd;
+  --color-wait: #9a6700;
+  --color-wait-soft: #f6e9c8;
+  --color-surface: #f7f4ec;
+
+  --shadow-card: 0 1px 0 rgba(28, 25, 22, 0.05), 0 10px 28px -16px rgba(28, 25, 22, 0.28);
+  --shadow-inset: inset 0 1px 2px rgba(28, 25, 22, 0.06);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

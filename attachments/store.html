@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<title>Store Assistant Kanban Dashboard</title>
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+
+    <header class="navbar">
+      <div class="nav-left">
+        <a class="brand" href="management.html">
+          <span class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 8.5a2 2 0 0 1-2 1.5H8.5A2 2 0 0 1 6.5 14.5L5 4H2"/><circle cx="9" cy="20" r="1.6"/><circle cx="17" cy="20" r="1.6"/></svg>
+          </span>
+          <span class="brand-name">Procurement Hub</span>
+        </a>
+        <nav class="nav-links" aria-label="Main">
+          <a class="nav-link active" href="store.html">Requisitions</a>
+          <a class="nav-link" href="inventory.html">Inventory</a>
+          <a class="nav-link" href="item.html">Items</a>
+          <a class="nav-link" href="management.html">Management</a>
+        </nav>
+      </div>
+      <div class="nav-right">
+        <button class="icon-btn" type="button" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="notif-badge" id="navNotifBadge">0</span>
+        </button>
+        <div class="profile-pill" id="userChip"></div>
+        <button class="signout-nav" type="button" onclick="signOut()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          <span>Sign out</span>
+        </button>
+      </div>
+    </header>
+
+    <header class="page-header">
+      <div>
+        <div class="breadcrumb">
+          <a href="management.html">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="current">Requisitions</span>
+          <span id="mgmtLinkWrap" style="display:none; margin-left: 12px; font-size: 13px;">
+            (<a href="management.html" style="color: var(--primary-ink); font-weight: 500;">Management Dashboard</a> | <a href="item.html" style="color: var(--primary-ink); font-weight: 500;">Public Form</a>)
+          </span>
+          <span style="margin-left: 12px; font-size: 13px;">
+            (<a href="inventory.html" style="color: var(--primary-ink); font-weight: 500;">Inventory</a>)
+          </span>
+        </div>
+        <h1 class="page-title">Store Assistant Dashboard</h1>
+        <p class="page-subtitle">Track requisitions, approvals, and purchase requests — decisions sync with the approval emails</p>
+      </div>
+      <div class="header-summary">
+        <div class="status-note" id="syncNote">Loading live data…</div>
+        <div class="total-badge">Total: <span id="total-count">0</span></div>
+      </div>
+    </header>
+
+    <div class="control-bar">
+      <div class="control-group">
+        <div class="header-field">
+          <label for="dashboard-date">Date</label>
+          <input id="dashboard-date" type="date" />
+        </div>
+        <div class="header-field">
+          <label for="store-assistant">Store Assistant</label>
+          <select id="store-assistant">
+            <option>Select Assistant</option>
+            <option>Store Manager</option>
+            <option>MD</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="kanban">
+
+      <div class="column" id="shopfloor">
+        <div class="column-header">
+          <div class="column-title">Shopfloor / Pending <span class="count-badge" data-count>0</span></div>
+        </div>
+        <div class="column-body" id="col-pending"></div>
+      </div>
+
+      <div class="column" id="requisition">
+        <div class="column-header">
+          <div class="column-title">Draft / Decided <span class="count-badge" data-count>0</span></div>
+        </div>
+        <div class="column-body" id="col-decided"></div>
+      </div>
+
+      <div class="column" id="confirmed">
+        <div class="column-header">
+          <div class="column-title">Confirmed PR <span class="count-badge" data-count>0</span></div>
+        </div>
+        <div class="column-body" id="col-confirmed"></div>
+      </div>
+
+      <div class="column" id="claimed">
+        <div class="column-header">
+          <div class="column-title">Store Claimed <span class="count-badge" data-count>0</span></div>
+        </div>
+        <div class="column-body" id="col-taken"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="js/gas-bridge.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let approvals = [];
+    const COL_PENDING = document.getElementById('col-pending');
+    const COL_DECIDED = document.getElementById('col-decided');
+    const COL_CONFIRMED = document.getElementById('col-confirmed');
+    const COL_TAKEN = document.getElementById('col-taken');
+    const syncNote = document.getElementById('syncNote');
+
+    COL_PENDING.innerHTML = AB.skeleton(2);
+    COL_DECIDED.innerHTML = AB.skeleton(2);
+    COL_CONFIRMED.innerHTML = AB.skeleton(2);
+    COL_TAKEN.innerHTML = AB.skeleton(2);
+
+    function pendingCard(a) {
+      const p = AB.parseBody(a.body);
+      const item = p.item || p['item name'] || p.description || a.subject || a.token;
+      const indentor = p.indentor || p['indentor name'] || a.to || '—';
+      const qty = p['item qty'] || p.quantity || p['item quantity'] || '—';
+      const stage = a.stage === 'save' ? 'Save draft' : 'Submit';
+      const escalated = a.status === 'escalated';
+      return `
+        <div class="card ${escalated ? 'card-escalated' : ''}" draggable="true" data-token="${AB.escapeHtml(a.token)}">
+          <div class="card-id">${AB.escapeHtml(a.token)} · <span style="color:var(--primary);">${AB.escapeHtml(stage)}</span></div>
+          ${escalated ? '<span class="badge badge-escalated">⚠ Escalated</span>' : ''}
+          <div class="card-row">
+            <div><div class="card-label">Item Name</div><div class="card-value">${AB.escapeHtml(item)}</div></div>
+            <div><div class="card-label">Approver</div><div class="card-value truncate" title="${AB.escapeHtml(a.to || '—')}">${AB.escapeHtml(a.to || '—')}</div></div>
+          </div>
+          <div class="card-label">Item Quantity</div><div class="card-value">${AB.escapeHtml(qty)}</div>
+          <button class="btn btn-superior" data-ask="${AB.escapeHtml(a.token)}">👔 Approval from Superior</button>
+          <button class="btn btn-take" data-take="${AB.escapeHtml(a.token)}">Take It — from Store Stock</button>
+          <div class="btn-group">
+            <button class="btn btn-approve" data-approve="${AB.escapeHtml(a.token)}">Approve</button>
+            <button class="btn btn-reject" data-reject="${AB.escapeHtml(a.token)}">Reject</button>
+          </div>
+        </div>`;
+    }
+
+    function decidedCard(a) {
+      const p = AB.parseBody(a.body);
+      const item = p.item || p['item name'] || p.description || a.subject || a.token;
+      const badgeCls = a.status === 'approved' ? 'badge-confirmed' : a.status === 'taken' ? 'badge-taken' : 'badge-rejected';
+      const label = a.status === 'approved' ? 'Approved' : a.status === 'taken' ? 'Taken from Store' : 'Rejected';
+      return `
+        <div class="card" draggable="true" data-token="${AB.escapeHtml(a.token)}">
+          <div class="card-row">
+            <div>
+              <div class="card-label">Request</div>
+              <div class="card-value id-value">${AB.escapeHtml(AB.shortToken(a.token))}</div>
+            </div>
+            <span class="badge ${badgeCls}">${label}</span>
+          </div>
+          <div class="card-label">Item</div><div class="card-value">${AB.escapeHtml(item)}</div>
+          <div class="card-label">Date</div><div class="card-value">${AB.escapeHtml(AB.fmtDate(a.decided_at || a.requested_at))}</div>
+          ${a.reason ? `<div class="reason">Reason: ${AB.escapeHtml(a.reason)}</div>` : ''}
+        </div>`;
+    }
+
+    function render() {
+      const pending = approvals.filter(a => a.status === 'pending' || a.status === 'escalated');
+      const approved = approvals.filter(a => a.status === 'approved');
+      const rejected = approvals.filter(a => a.status === 'rejected');
+      const taken = approvals.filter(a => a.status === 'taken');
+      const confirmed = approved.filter(a => a.stage === 'submit');
+      const draft = approved.filter(a => a.stage !== 'submit');
+
+      COL_PENDING.innerHTML = pending.length
+        ? pending.map(pendingCard).join('')
+        : '<div class="empty-hint">No pending approvals.</div>';
+      COL_DECIDED.innerHTML = [...draft, ...rejected]
+        .map(decidedCard).join('') || '<div class="empty-hint">Nothing decided yet.</div>';
+      COL_CONFIRMED.innerHTML = confirmed
+        .map(decidedCard).join('') || '<div class="empty-hint">No confirmed PRs yet.</div>';
+      COL_TAKEN.innerHTML = taken
+        .map(decidedCard).join('') || '<div class="empty-hint">No claimed items yet.</div>';
+
+      document.querySelectorAll('.column').forEach(col => {
+        const count = col.querySelectorAll('.card').length;
+        const badge = col.querySelector('[data-count]');
+        if (badge) badge.textContent = count;
+      });
+      document.getElementById('total-count').textContent = approvals.length;
+      document.getElementById('navNotifBadge').textContent = approvals.filter(a => a.status === 'pending').length;
+      bindCardActions();
+      bindDragDrop();
+    }
+
+    async function refresh() {
+      const r = await AB.api('/api/approvals');
+      if (r.error) {
+        syncNote.textContent = 'Offline — could not reach the approval server';
+        syncNote.style.color = '#991b1b';
+      } else {
+        approvals = Array.isArray(r.data) ? r.data : [];
+        syncNote.textContent = 'Live data from the approval bot';
+        syncNote.style.color = '#166534';
+      }
+      render();
+    }
+
+    async function act(path, params, okMsg) {
+      const r = await AB.api(path, {
+        method: 'POST',
+        body: new URLSearchParams(params)
+      });
+      if (r.error) {
+        AB.toast('Action failed: ' + r.error, true);
+      } else {
+        AB.toast(okMsg);
+      }
+      refresh();
+    }
+
+    function guard(btn, fn) {
+      return async () => {
+        if (btn.dataset.busy) return;
+        btn.dataset.busy = '1';
+        AB.setBusy(btn, true);
+        try { await fn(); } finally {
+          delete btn.dataset.busy;
+          if (btn.classList.contains('sent')) {
+            btn.classList.remove('is-loading'); // keep the "Sent" label, drop the spinner
+          } else {
+            AB.setBusy(btn, false);
+          }
+        }
+      };
+    }
+
+    function bindCardActions() {
+      document.querySelectorAll('[data-approve]').forEach(btn => {
+        btn.onclick = guard(btn, () => act('/approve', { token: btn.dataset.approve }, 'Approved. The bot will proceed.'));
+      });
+      document.querySelectorAll('[data-reject]').forEach(btn => {
+        btn.onclick = guard(btn, () => {
+          const reason = window.prompt('Rejection reason (optional):', '');
+          if (reason === null) return;
+          return act('/reject', { token: btn.dataset.reject, reason: reason || '' }, 'Rejected.');
+        });
+      });
+      document.querySelectorAll('[data-ask]').forEach(btn => {
+        btn.onclick = guard(btn, () => act('/ask', { token: btn.dataset.ask }, 'Request forwarded to the senior approvers.')
+          .then(() => {
+            btn.classList.add('sent');
+            btn.innerHTML = '✅ Sent to Superior';
+            btn.disabled = true;
+          }));
+      });
+      document.querySelectorAll('[data-take]').forEach(btn => {
+        btn.onclick = guard(btn, () => act('/take', { token: btn.dataset.take }, 'Request fulfilled from store stock.'));
+      });
+    }
+
+    function bindDragDrop() {
+      document.querySelectorAll('.card').forEach(draggable => {
+        draggable.addEventListener('dragstart', () => draggable.classList.add('dragging'));
+        draggable.addEventListener('dragend', () => {
+          draggable.classList.remove('dragging');
+          updateCounts();
+        });
+      });
+      document.querySelectorAll('.column').forEach(container => {
+        container.ondragover = e => {
+          e.preventDefault();
+          const afterElement = getDragAfterElement(container, e.clientY);
+          const draggable = document.querySelector('.dragging');
+          if (!draggable) return;
+          if (afterElement == null) container.appendChild(draggable);
+          else container.insertBefore(draggable, afterElement);
+        };
+        container.ondragenter = e => { e.preventDefault(); container.classList.add('drag-over'); };
+        container.ondragleave = e => { if (e.target === container) container.classList.remove('drag-over'); };
+        container.ondrop = () => container.classList.remove('drag-over');
+      });
+      updateCounts();
+    }
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) return { offset, element: child };
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function updateCounts() {
+      let total = 0;
+      document.querySelectorAll('.column').forEach(container => {
+        const count = container.querySelectorAll('.card').length;
+        const badge = container.querySelector('[data-count]');
+        if (badge) badge.textContent = count;
+        total += count;
+      });
+      document.getElementById('total-count').textContent = total;
+    }
+
+    document.getElementById('dashboard-date').value = new Date().toISOString().split('T')[0];
+
+    AB.api('/api/me').then(r => {
+      const me = r.data || {};
+      if (!me || !me.email) {
+        window.location.href = 'login.html';
+        return;
+      }
+      AB.applyNavPermissions(me);
+      if (!AB.guardPage(me, 'store.html')) return;
+      const perms = AB.getUserPermissions(me);
+      if (perms.canAccessAll) {
+        const wrap = document.getElementById('mgmtLinkWrap');
+        if (wrap) wrap.style.display = 'inline';
+      }
+    });
+
+    AB.initUserChip();
+    AB.startPolling(refresh, 8000);
+  </script>
+</body>
+</html>
