@@ -66,8 +66,12 @@ LOGIN_FAILURE_URL_MARKER = "loginfailure"
 LOGOUT_PATHS = ["/Login/logout", "/Login/Logout", "/Logout", "/logout",
                 "/Login/Login.html?logout=true"]
 
-if not USERNAME or not PASSWORD:
-    raise SystemExit("TCS_USERNAME and TCS_PASSWORD environment variables are required")
+# Optional Bot ↔ Dashboard client bridge
+try:
+    from dashboard_client import DashboardClient
+    _dash_client = DashboardClient()
+except Exception:
+    _dash_client = None
 
 SIDEBAR_LABELS = ["Home", "Procurement", "Inventory", "Engineering", "Master",
                   "Import/Export", "Reports"]
@@ -1361,6 +1365,19 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
 
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
+    global USERNAME, PASSWORD
+    USERNAME = os.environ.get("TCS_USERNAME")
+    PASSWORD = os.environ.get("TCS_PASSWORD")
+    if not USERNAME or not PASSWORD:
+        msg = "TCS_USERNAME and TCS_PASSWORD environment variables are required"
+        print(f"ERROR: {msg}")
+        if _dash_client:
+            try:
+                _dash_client.report_run("BOT-TCS-PRPO", "failed", error=msg)
+            except Exception:
+                pass
+        return False
+
     from playwright.sync_api import sync_playwright
 
     headless = os.environ.get("HEADLESS", "true").lower() not in ("false", "0", "no")
@@ -1412,6 +1429,11 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
                         time.sleep(PR_RETRY_DELAY)
                     continue
                 print(f"  Requisition {req_no} approved")
+                if _dash_client:
+                    try:
+                        _dash_client.create_alert("info", f"PR {req_no} created", f"TCS PR {req_no} created for {item_code} x{qty_str}", bot_code="BOT-TCS-PRPO")
+                    except Exception:
+                        pass
                 break
 
             if not req_no or not approved:
@@ -1422,6 +1444,11 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
                 print("  Purchase Order: NOT attempted")
                 print("  RESULT: FAILED")
                 print("=" * 50)
+                if _dash_client:
+                    try:
+                        _dash_client.report_run("BOT-TCS-PRPO", "failed", {"pr_number": req_no, "po_ok": False, "item_code": item_code, "qty": qty_str, "error": last_pr_err})
+                    except Exception:
+                        pass
                 return False
 
             # 4. Create PO (only after the PR succeeded; never re-run on retries).
@@ -1434,6 +1461,11 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
                 print("  Purchase Order: FAILED (could not reach PO form)")
                 print("  RESULT: PARTIAL (PR created, PO failed)")
                 print("=" * 50)
+                if _dash_client:
+                    try:
+                        _dash_client.report_run("BOT-TCS-PRPO", "failed", {"pr_number": req_no, "po_ok": False, "item_code": item_code, "qty": qty_str, "error": "could not reach PO form"})
+                    except Exception:
+                        pass
                 return False
 
             po_ok = create_po_from_pr(mfg_page2, po_data, requisition_no=req_no)
@@ -1444,10 +1476,20 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
                 print(f"  Purchase Order: Created")
                 print(f"  Item: {item_code}, Qty: {qty_str}")
                 print("  RESULT: SUCCESS")
+                if _dash_client:
+                    try:
+                        _dash_client.report_run("BOT-TCS-PRPO", "success", {"pr_number": req_no, "po_ok": True, "item_code": item_code, "qty": qty_str})
+                    except Exception:
+                        pass
             else:
                 print(f"  Requisition: {req_no}")
                 print("  Purchase Order: FAILED")
                 print("  RESULT: PARTIAL (PR created, PO failed)")
+                if _dash_client:
+                    try:
+                        _dash_client.report_run("BOT-TCS-PRPO", "failed", {"pr_number": req_no, "po_ok": False, "item_code": item_code, "qty": qty_str})
+                    except Exception:
+                        pass
             print("=" * 50)
             return po_ok
 
@@ -1456,6 +1498,11 @@ def run(item_code, qty, po_type="Domestic", currency="INR"):
             return False
         except Exception as e:
             print(f"\nERROR: {e}")
+            if _dash_client:
+                try:
+                    _dash_client.report_run("BOT-TCS-PRPO", "failed", error=str(e))
+                except Exception:
+                    pass
             import traceback
             traceback.print_exc()
             return False

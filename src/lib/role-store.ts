@@ -2,16 +2,27 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role } from "@/lib/plant";
 
-type RoleState = {
+export type SessionUser = {
+  userId: string;
+  name: string;
   role: Role;
-  setRole: (role: Role) => void;
+  department: string;
 };
 
-export const useRole = create<RoleState>()(
+type SessionState = {
+  user: SessionUser | null;
+  role: Role;
+  signIn: (user: SessionUser) => void;
+  signOut: () => void;
+};
+
+export const useRole = create<SessionState>()(
   persist(
     (set) => ({
+      user: null,
       role: "shopfloor",
-      setRole: (role) => set({ role }),
+      signIn: (user) => set({ user, role: user.role }),
+      signOut: () => set({ user: null }),
     }),
     { name: "plant-desk-role", skipHydration: true },
   ),

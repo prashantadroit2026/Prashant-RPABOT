@@ -8,7 +8,7 @@ const SLIP_SELECT = `
     s.qty, s.issued_qty, s.department, s.station, s.hod_title, s.hod_confirmed,
     s.slip_date::text as slip_date, s.status, s.note,
     s.created_at::text as created_at, s.decided_at::text as decided_at,
-    i.qty as on_hand, i.reorder_level
+    i.qty as on_hand, i.reorder_level, s.description
   from slips s
   join items i on i.id = s.item_id
   left join machines m on m.id = s.machine_id
@@ -34,6 +34,7 @@ function mapSlip(r: Record<string, unknown>) {
     slipDate: r.slip_date,
     status: r.status,
     note: r.note,
+    description: r.description,
     createdAt: String(r.created_at),
     decidedAt: r.decided_at ? String(r.decided_at) : null,
     onHand: r.on_hand,

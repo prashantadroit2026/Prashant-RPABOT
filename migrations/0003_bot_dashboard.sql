@@ -70,12 +70,13 @@ create table if not exists audit_logs (
 create index if not exists audit_logs_entity_idx on audit_logs (entity_type, entity_id);
 create index if not exists audit_logs_created_idx on audit_logs (created_at desc);
 
--- Seed: 4 representative bots
+-- Seed: 5 representative bots (including TCS iON PR+PO RPA bot)
 insert into bots (code, name, description, type, status, cron_expr, config) values
   ('BOT-INV-SYNC', 'Inventory Sync Bot', 'Polls rack quantities every 10 min and raises low-stock alerts.', 'inventory', 'active', '*/10 * * * *', '{"threshold_pct": 15, "notify": "store"}'),
   ('BOT-SLIP-PROC', 'Slip Processor', 'Auto-issues from stock when qty available, else drafts PR.', 'slip', 'active', '*/5 * * * *', '{"auto_issue": true, "require_hod": false}'),
   ('BOT-REORDER', 'Reorder Watcher', 'Computes days-of-cover < 3 and creates PR suggestions.', 'reorder', 'active', '0 */6 * * *', '{"days_cover": 3}'),
-  ('BOT-REPORT', 'Nightly Report Bot', 'Generates consumption vs receipt CSV at 02:00 UTC.', 'report', 'paused', '0 2 * * *', '{"format": "csv", "recipients": ["management@plant.local"]}')
+  ('BOT-REPORT', 'Nightly Report Bot', 'Generates consumption vs receipt CSV at 02:00 UTC.', 'report', 'paused', '0 2 * * *', '{"format": "csv", "recipients": ["management@plant.local"]}'),
+  ('BOT-TCS-PRPO', 'TCS iON PR+PO Bot', 'Creates PR, approves, then creates PO from PR via Playwright. See Bot/create_pr_po.py', 'generic', 'active', '0 9 * * 1', '{"script": "Bot/create_pr_po.py", "item_code": "PCPWB60132", "po_type": "Domestic"}')
 on conflict (code) do nothing;
 
 -- Seed: recent runs for each bot (last 7 days)

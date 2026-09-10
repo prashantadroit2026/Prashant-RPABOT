@@ -66,3 +66,26 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Thin custom scrollbar for horizontally scrollable tables */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  height: 8px;
+}
+
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 9999px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brass);
+}

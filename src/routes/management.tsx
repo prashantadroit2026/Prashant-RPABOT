@@ -20,7 +20,15 @@ import { statusLabel } from "@/lib/plant";
 import { getRefillDashboard, listSlips, receiveSlip } from "@/lib/plant-server";
 import { fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/management")({ component: ManagementPage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/management")({
+  component: () => (
+    <RequireRole roles={["management", "store"]}>
+      <ManagementPage />
+    </RequireRole>
+  ),
+});
 
 function ManagementPage() {
   const qc = useQueryClient();

@@ -82,6 +82,69 @@ class DashboardClient:
         """GET /api/catalog — {items:[], machines:[]}."""
         return self._get("/api/catalog")
 
+    def get_slip_groups(self):
+        """GET /api/indents — returns list of slip groups (each with .slips[])."""
+        return self._get("/api/indents")
+
+    def get_pending_groups(self):
+        """Return only groups that still have at least one pending slip."""
+        groups = self.get_slip_groups() or []
+        return [
+            g for g in groups
+            if any(s.get("status") == "pending" for s in g.get("slips", []))
+        ]
+
+    def submit_indent(
+        self,
+        date: str,
+        department: str,
+        machine: str,
+        cell: str,
+        items: list[dict[str, Any]],
+        hod_signature_confirmed: bool = True,
+    ) -> Any:
+        """POST /api/indents — submit a multi-item requisition indent.
+
+        Args:
+            date: Slip date as "DD-MM-YYYY" or "YYYY-MM-DD".
+            department: e.g. "Maintenance"
+            machine: Machine code or name, e.g. "CNC-01" or "Machine_01"
+            cell: Cell / station name, e.g. "Lathe cell"
+            items: List of dicts with keys "itemId" (item code str) and
+                   "quantity" (int).
+                   Example: [{"itemId": "CUT-118", "quantity": 6}]
+            hod_signature_confirmed: Must be True (HOD authorisation gate).
+
+        Returns:
+            The created SlipGroup dict, or None on failure.
+
+        Example::
+
+            dash.submit_indent(
+                date="10-09-2026",
+                department="Maintenance",
+                machine="CNC-01",
+                cell="Lathe cell",
+                items=[
+                    {"itemId": "HYD-040", "quantity": 10},
+                    {"itemId": "BRG-6205", "quantity": 4},
+                ],
+            )
+        """
+        payload: dict[str, Any] = {
+            "date": date,
+            "department": department,
+            "machine": machine,
+            "cell": cell,
+            "hodSignatureConfirmed": hod_signature_confirmed,
+            "items": items,
+        }
+        result = self._post("/api/indents", payload)
+        if result and "groupToken" in result:
+            n = len(result.get("slips", []))
+            print(f"  [dashboard] Indent submitted: {result['groupToken']} · {n} slip(s)")
+        return result
+
     def create_alert(self, severity: str, title: str, message: str = "", bot_code: str | None = None, item_id: int | None = None):
         """POST /api/alerts — create a dashboard alert visible on /system."""
         # Resolve bot_id from code if given
@@ -109,5 +172,17 @@ class DashboardClient:
 if __name__ == "__main__":
     c = DashboardClient()
     print("health:", c.health())
-    print("catalog items:", len((c.get_catalog() or {}).get("items", [])))
+    catalog = c.get_catalog() or {}
+    print("catalog items:", len(catalog.get("items", [])))
     print("pending slips:", len(c.get_pending_slips() or []))
+    groups = c.get_slip_groups() or []
+    print("slip groups:", len(groups))
+    # Example indent submission (commented out — uncomment to test):
+    # result = c.submit_indent(
+    #     date="10-09-2026",
+    #     department="Maintenance",
+    #     machine="CNC-01",
+    #     cell="Lathe cell",
+    #     items=[{"itemId": "HYD-040", "quantity": 10}],
+    # )
+    # print("submitted:", result)

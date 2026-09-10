@@ -46,14 +46,19 @@ export default defineHandler(async (event) => {
     return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: { "content-type": "application/json" } });
   }
   const body = await event.req.json().catch(() => null) as { id?: number; mode?: string } | null;
-  if (!body || typeof body.id !== "number" || !["stock", "split", "pr"].includes(String(body.mode))) {
-    return new Response(JSON.stringify({ error: "id (number) and mode (stock|split|pr) required" }), { status: 400, headers: { "content-type": "application/json" } });
+  if (!body || typeof body.id !== "number" || !["stock", "split", "pr", "reject"].includes(String(body.mode))) {
+    return new Response(JSON.stringify({ error: "id (number) and mode (stock|split|pr|reject) required" }), { status: 400, headers: { "content-type": "application/json" } });
   }
   const sql = await getSql();
   const [slip] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [body.id]);
   if (!slip) return new Response(JSON.stringify({ error: "Slip not found" }), { status: 404, headers: { "content-type": "application/json" } });
   if (slip.status !== "pending") return new Response(JSON.stringify({ error: "This slip has already been actioned" }), { status: 400, headers: { "content-type": "application/json" } });
-  const mode = body.mode as "stock" | "split" | "pr";
+  const mode = body.mode as "stock" | "split" | "pr" | "reject";
+  if (mode === "reject") {
+    await sql`update slips set status='rejected', decided_at=now(), note='Rejected at store desk — not fulfilled' where id = ${slip.id}`;
+    const [out] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);
+    return new Response(JSON.stringify(mapSlip(out)), { headers: { "content-type": "application/json" } });
+  }
   if (mode === "pr") {
     await sql`update slips set status='pr_open', decided_at=now(), note='Raised PR — nothing issued from rack' where id = ${slip.id}`;
     const [out] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);

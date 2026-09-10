@@ -9,7 +9,15 @@ import { Card } from "@/components/ui/card";
 import { getBotStats, listAlerts, listBots, listBotRuns } from "@/lib/bot-server";
 import { getCatalog, getInventory, getMachineStats, listSlips } from "@/lib/plant-server";
 
-export const Route = createFileRoute("/system")({ component: SystemPage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/system")({
+  component: () => (
+    <RequireRole>
+      <SystemPage />
+    </RequireRole>
+  ),
+});
 
 type Tab = "overview" | "tables" | "api" | "live";
 
@@ -240,6 +248,7 @@ const TABLE_DEFS: { name: string; sql: string; desc: string; cols: { col: string
       { col: "slip_date", type: "date", note: "" },
       { col: "status", type: "text", note: "pending|issued|partial|pr_open|received" },
       { col: "note", type: "text", note: "" },
+      { col: "description", type: "text", note: "per-item note" },
       { col: "created_at / decided_at", type: "timestamptz", note: "" },
     ],
     indexes: ["slips_status_idx (status, created_at desc)"],

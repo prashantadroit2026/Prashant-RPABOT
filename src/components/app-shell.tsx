@@ -1,14 +1,17 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
   Bot,
+  ClipboardList,
   ClipboardPen,
   Database,
   Factory,
+  LogOut,
   Package,
   Warehouse,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { ROLE_LABEL } from "@/lib/plant";
 import { useRole } from "@/lib/role-store";
 import type { Role } from "@/lib/plant";
 import { cn } from "@/lib/utils";
@@ -16,6 +19,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Raise slip", icon: ClipboardPen, roles: ["shopfloor", "store", "management"] as Role[] },
   { to: "/store", label: "Store desk", icon: Warehouse, roles: ["store", "management"] as Role[] },
+  { to: "/requests", label: "Requests", icon: ClipboardList, roles: ["store", "management"] as Role[] },
   { to: "/inventory", label: "Rack", icon: Package, roles: ["store", "management"] as Role[] },
   { to: "/machines", label: "Machines", icon: Factory, roles: ["shopfloor", "store", "management"] as Role[] },
   { to: "/management", label: "Refill", icon: BarChart3, roles: ["management", "store"] as Role[] },
@@ -30,13 +34,20 @@ const ROLE_META: Record<Role, { label: string; hint: string }> = {
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const role = useRole((s) => s.role);
-  const setRole = useRole((s) => s.setRole);
+  const user = useRole((s) => s.user);
+  const signOut = useRole((s) => s.signOut);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     void useRole.persist.rehydrate();
   }, []);
+
+  function handleSignOut() {
+    signOut();
+    void navigate({ to: "/login" });
+  }
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
@@ -56,20 +67,26 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </span>
               </span>
             </Link>
-            <div className="flex rounded-lg bg-surface p-1 shadow-inset">
-              {(Object.keys(ROLE_META) as Role[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className={cn(
-                    "h-9 rounded-md px-2.5 text-xs font-semibold sm:px-3",
-                    role === r ? "bg-paper text-ink shadow-card" : "text-muted hover:text-ink",
-                  )}
-                >
-                  {ROLE_META[r].label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <span className="hidden h-9 w-9 place-items-center rounded-full bg-ink text-sm font-semibold text-paper sm:grid">
+                {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
+              </span>
+              <span className="hidden min-w-0 sm:block">
+                <span className="block truncate text-right text-sm font-semibold text-ink">
+                  {user?.name ?? "Guest"}
+                </span>
+                <span className="block text-right text-xs text-muted">
+                  {user ? ROLE_LABEL[user.role] : "Signed out"}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-xs font-semibold text-muted transition-colors hover:border-[#6e470e]/40 hover:text-ink"
+              >
+                <LogOut className="size-3.5" />
+                Sign out
+              </button>
             </div>
           </div>
           <nav
@@ -147,7 +164,7 @@ export function Kpi({
   label: string;
   value: string | number;
   hint?: string;
-  tone?: "ok" | "wait" | "stop";
+  tone?: "ok" | "wait" | "stop" | "brass";
 }) {
   return (
     <div className="rounded-lg bg-paper p-4 shadow-card">
@@ -158,6 +175,7 @@ export function Kpi({
           tone === "ok" && "text-ok",
           tone === "wait" && "text-wait",
           tone === "stop" && "text-stop",
+          tone === "brass" && "text-brass",
           !tone && "text-ink",
         )}
       >

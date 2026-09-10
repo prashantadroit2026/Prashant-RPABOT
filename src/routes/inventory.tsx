@@ -9,7 +9,15 @@ import { Input, Select } from "@/components/ui/input";
 import { getInventory } from "@/lib/plant-server";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/inventory")({ component: InventoryPage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/inventory")({
+  component: () => (
+    <RequireRole roles={["store", "management"]}>
+      <InventoryPage />
+    </RequireRole>
+  ),
+});
 
 function InventoryPage() {
   const inv = useQuery({ queryKey: ["inventory"], queryFn: () => getInventory() });

@@ -8,7 +8,7 @@ const SLIP_SELECT = `
     s.qty, s.issued_qty, s.department, s.station, s.hod_title, s.hod_confirmed,
     s.slip_date::text as slip_date, s.status, s.note,
     s.created_at::text as created_at, s.decided_at::text as decided_at,
-    i.qty as on_hand, i.reorder_level
+    i.qty as on_hand, i.reorder_level, s.description
   from slips s
   join items i on i.id = s.item_id
   left join machines m on m.id = s.machine_id
@@ -34,6 +34,7 @@ function mapSlip(r: Record<string, unknown>) {
     slipDate: r.slip_date,
     status: r.status,
     note: r.note,
+    description: r.description,
     createdAt: String(r.created_at),
     decidedAt: r.decided_at ? String(r.decided_at) : null,
     onHand: r.on_hand,
@@ -46,14 +47,19 @@ export const Route = createFileRoute("/api/slips/decide")({
     handlers: {
       POST: async ({ request }) => {
         const body = (await request.json().catch(() => null)) as { id?: number; mode?: string } | null;
-        if (!body || typeof body.id !== "number" || !["stock", "split", "pr"].includes(String(body.mode))) {
-          return Response.json({ error: "id (number) and mode (stock|split|pr) required" }, { status: 400 });
+        if (!body || typeof body.id !== "number" || !["stock", "split", "pr", "reject"].includes(String(body.mode))) {
+          return Response.json({ error: "id (number) and mode (stock|split|pr|reject) required" }, { status: 400 });
         }
         const sql = await getSql();
         const [slip] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [body.id]);
         if (!slip) return Response.json({ error: "Slip not found" }, { status: 404 });
         if (slip.status !== "pending") return Response.json({ error: "This slip has already been actioned" }, { status: 400 });
-        const mode = body.mode as "stock" | "split" | "pr";
+        const mode = body.mode as "stock" | "split" | "pr" | "reject";
+        if (mode === "reject") {
+          await sql`update slips set status='rejected', decided_at=now(), note='Rejected at store desk — not fulfilled' where id = ${slip.id}`;
+          const [out] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);
+          return Response.json(mapSlip(out));
+        }
         if (mode === "pr") {
           await sql`update slips set status='pr_open', decided_at=now(), note='Raised PR — nothing issued from rack' where id = ${slip.id}`;
           const [out] = await sql.query<Record<string, unknown>>(`${SLIP_SELECT} where s.id = $1`, [slip.id]);

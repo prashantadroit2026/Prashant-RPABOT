@@ -1,5 +1,11 @@
 export type Role = "shopfloor" | "store" | "management";
 
+export const ROLE_LABEL: Record<Role, string> = {
+  shopfloor: "Shopflow",
+  store: "Store",
+  management: "Management",
+};
+
 export type Item = {
   id: number;
   code: string;
@@ -7,6 +13,8 @@ export type Item = {
   uom: string;
   reorderLevel: number;
   qty: number;
+  category: string;
+  unitPrice: number;
 };
 
 export type Machine = {
@@ -16,7 +24,7 @@ export type Machine = {
   line: string;
 };
 
-export type SlipStatus = "pending" | "issued" | "partial" | "pr_open" | "received";
+export type SlipStatus = "pending" | "issued" | "partial" | "pr_open" | "received" | "rejected";
 
 export type Slip = {
   id: number;
@@ -37,6 +45,7 @@ export type Slip = {
   slipDate: string;
   status: SlipStatus;
   note: string;
+  description: string;
   createdAt: string;
   decidedAt: string | null;
   onHand: number;
@@ -68,6 +77,20 @@ export const HOD_BY_DEPT: Record<string, string> = {
   Warehouse: "Warehouse HOD",
   "Tool Room": "Tool Room HOD",
 };
+
+export const ITEM_CATEGORIES = [
+  "Bearings",
+  "Lubricants & Fluids",
+  "Cutting Tools",
+  "Safety & PPE",
+  "Pneumatics",
+  "Filters",
+  "Transmission",
+  "Welding",
+  "General Spares",
+] as const;
+
+export const UNIT_OF_MEASURES = ["Pcs", "Ltr", "Kg", "Pair", "Roll", "Set", "Mtr", "Box", "Pack"] as const;
 
 export function stockStatus(qty: number, reorder: number): "in" | "low" | "out" {
   if (qty <= 0) return "out";
@@ -111,6 +134,7 @@ export function statusLabel(s: SlipStatus): string {
   if (s === "partial") return "Partial + PR";
   if (s === "pr_open") return "PR open";
   if (s === "received") return "Received";
+  if (s === "rejected") return "Rejected";
   return "Pending store";
 }
 

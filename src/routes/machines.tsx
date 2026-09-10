@@ -16,7 +16,15 @@ import { Card } from "@/components/ui/card";
 import { getMachineStats } from "@/lib/plant-server";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/machines")({ component: MachinesPage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/machines")({
+  component: () => (
+    <RequireRole>
+      <MachinesPage />
+    </RequireRole>
+  ),
+});
 
 function MachinesPage() {
   const stats = useQuery({ queryKey: ["machines"], queryFn: () => getMachineStats() });

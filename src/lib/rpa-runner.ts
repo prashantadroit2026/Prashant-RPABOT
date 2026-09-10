@@ -76,10 +76,12 @@ export async function runRpaBot(opts: {
       PYTHONUNBUFFERED: "1",
     };
 
-    const child = spawn("python3", args, {
+    const pythonBin = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
+    const child = spawn(pythonBin, args, {
       env,
       cwd: projectRoot(),
       stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
     });
 
     let stdout = "";

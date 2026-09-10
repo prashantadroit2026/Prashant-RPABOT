@@ -8,16 +8,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { statusLabel, verdictFor, type Slip } from "@/lib/plant";
-import { decideSlip, listSlips, receiveSlip } from "@/lib/plant-server";
+import { decideSlip, listSlips, listSlipGroups, receiveSlip, type SlipGroup } from "@/lib/plant-server";
 import { cn, fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/store")({ component: StorePage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/store")({
+  component: () => (
+    <RequireRole roles={["store", "management"]}>
+      <StorePage />
+    </RequireRole>
+  ),
+});
 
 type Filter = "pending" | "pr" | "done";
 
 function StorePage() {
   const qc = useQueryClient();
   const slips = useQuery({ queryKey: ["slips"], queryFn: () => listSlips() });
+  const groups = useQuery({ queryKey: ["slip-groups"], queryFn: () => listSlipGroups() });
   const [filter, setFilter] = useState<Filter>("pending");
 
   const rows = slips.data ?? [];
@@ -28,6 +37,17 @@ function StorePage() {
   const shown = filter === "pending" ? pending : filter === "pr" ? prs : done;
   const canIssue = pending.filter((s) => verdictFor(s.qty, s.onHand).code === "stock").length;
   const needPr = pending.filter((s) => verdictFor(s.qty, s.onHand).code !== "stock").length;
+
+  // Build a map from slip id → group token (for multi-item indent badge)
+  const slipGroupMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const g of groups.data ?? []) {
+      for (const s of g.slips) {
+        map.set(s.id, g.groupToken);
+      }
+    }
+    return map;
+  }, [groups.data]);
 
   const decide = useMutation({
     mutationFn: (input: { id: number; mode: "stock" | "split" | "pr" }) =>
@@ -94,6 +114,7 @@ function StorePage() {
             <SlipCard
               key={s.id}
               slip={s}
+              groupToken={slipGroupMap.get(s.id)}
               busy={decide.isPending || receive.isPending}
               onDecide={(mode) => decide.mutate({ id: s.id, mode })}
               onReceive={() => receive.mutate(s.id)}
@@ -107,11 +128,13 @@ function StorePage() {
 
 function SlipCard({
   slip,
+  groupToken,
   busy,
   onDecide,
   onReceive,
 }: {
   slip: Slip;
+  groupToken?: string;
   busy: boolean;
   onDecide: (mode: "stock" | "split" | "pr") => void;
   onReceive: () => void;
@@ -122,7 +145,14 @@ function SlipCard({
     <Card className="p-0">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-3">
         <div>
-          <div className="font-mono text-xs text-muted">{slip.token}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-muted">{slip.token}</span>
+            {groupToken && (
+              <span className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                {groupToken}
+              </span>
+            )}
+          </div>
           <h2 className="text-base font-semibold">
             {slip.itemName}{" "}
             <span className="font-mono text-sm font-medium text-muted">
@@ -155,6 +185,7 @@ function SlipCard({
             <Mini n={slip.reorderLevel} l="Reorder" />
           </div>
           {open && <StockVerdictBanner verdict={v} />}
+          {slip.description && <p className="text-sm text-muted">{slip.description}</p>}
           {slip.note && <p className="text-xs text-muted">{slip.note}</p>}
           <p className="text-xs text-muted">Authorised by {slip.hodTitle}</p>
         </div>

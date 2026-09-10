@@ -13,7 +13,15 @@ import { listBots, listBotRuns, triggerBot } from "@/lib/bot-server";
 import { listBotFiles } from "@/lib/bot-files";
 import { cn, fmtDate } from "@/lib/utils";
 
-export const Route = createFileRoute("/bots")({ component: BotsPage });
+import { RequireRole } from "@/components/role-guard";
+
+export const Route = createFileRoute("/bots")({
+  component: () => (
+    <RequireRole>
+      <BotsPage />
+    </RequireRole>
+  ),
+});
 
 function BotsPage() {
   const qc = useQueryClient();

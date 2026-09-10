@@ -12,12 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BotsRouteImport } from './routes/bots'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as MachinesRouteImport } from './routes/machines'
 import { Route as ManagementRouteImport } from './routes/management'
+import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as StoreRouteImport } from './routes/store'
 import { Route as SystemRouteImport } from './routes/system'
 import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiIndentsRouteImport } from './routes/api/indents'
 import { Route as ApiInventoryRouteImport } from './routes/api/inventory'
 import { Route as ApiMachinesRouteImport } from './routes/api/machines'
 import { Route as ApiOpenapiDotjsonRouteImport } from './routes/api/openapi[.]json'
@@ -46,6 +49,11 @@ const InventoryRoute = InventoryRouteImport.update({
   path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MachinesRoute = MachinesRouteImport.update({
   id: '/machines',
   path: '/machines',
@@ -54,6 +62,11 @@ const MachinesRoute = MachinesRouteImport.update({
 const ManagementRoute = ManagementRouteImport.update({
   id: '/management',
   path: '/management',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestsRoute = RequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StoreRoute = StoreRouteImport.update({
@@ -74,6 +87,11 @@ const ApiCatalogRoute = ApiCatalogRouteImport.update({
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIndentsRoute = ApiIndentsRouteImport.update({
+  id: '/api/indents',
+  path: '/api/indents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiInventoryRoute = ApiInventoryRouteImport.update({
@@ -141,12 +159,15 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bots': typeof BotsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/management': typeof ManagementRoute
+  '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
   '/api/inventory': typeof ApiInventoryRoute
   '/api/machines': typeof ApiMachinesRoute
   '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
@@ -164,12 +185,15 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bots': typeof BotsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/management': typeof ManagementRoute
+  '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
   '/api/inventory': typeof ApiInventoryRoute
   '/api/machines': typeof ApiMachinesRoute
   '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
@@ -188,12 +212,15 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/bots': typeof BotsRoute
   '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/management': typeof ManagementRoute
+  '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
   '/api/inventory': typeof ApiInventoryRoute
   '/api/machines': typeof ApiMachinesRoute
   '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
@@ -213,12 +240,15 @@ export interface FileRouteTypes {
     | '/'
     | '/bots'
     | '/inventory'
+    | '/login'
     | '/machines'
     | '/management'
+    | '/requests'
     | '/store'
     | '/system'
     | '/api/catalog'
     | '/api/health'
+    | '/api/indents'
     | '/api/inventory'
     | '/api/machines'
     | '/api/openapi.json'
@@ -236,12 +266,15 @@ export interface FileRouteTypes {
     | '/'
     | '/bots'
     | '/inventory'
+    | '/login'
     | '/machines'
     | '/management'
+    | '/requests'
     | '/store'
     | '/system'
     | '/api/catalog'
     | '/api/health'
+    | '/api/indents'
     | '/api/inventory'
     | '/api/machines'
     | '/api/openapi.json'
@@ -259,12 +292,15 @@ export interface FileRouteTypes {
     | '/'
     | '/bots'
     | '/inventory'
+    | '/login'
     | '/machines'
     | '/management'
+    | '/requests'
     | '/store'
     | '/system'
     | '/api/catalog'
     | '/api/health'
+    | '/api/indents'
     | '/api/inventory'
     | '/api/machines'
     | '/api/openapi.json'
@@ -283,12 +319,15 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BotsRoute: typeof BotsRoute
   InventoryRoute: typeof InventoryRoute
+  LoginRoute: typeof LoginRoute
   MachinesRoute: typeof MachinesRoute
   ManagementRoute: typeof ManagementRoute
+  RequestsRoute: typeof RequestsRoute
   StoreRoute: typeof StoreRoute
   SystemRoute: typeof SystemRoute
   ApiCatalogRoute: typeof ApiCatalogRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiIndentsRoute: typeof ApiIndentsRoute
   ApiInventoryRoute: typeof ApiInventoryRoute
   ApiMachinesRoute: typeof ApiMachinesRoute
   ApiOpenapiDotjsonRoute: typeof ApiOpenapiDotjsonRoute
@@ -326,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/machines': {
       id: '/machines'
       path: '/machines'
@@ -338,6 +384,13 @@ declare module '@tanstack/react-router' {
       path: '/management'
       fullPath: '/management'
       preLoaderRoute: typeof ManagementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/requests': {
+      id: '/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof RequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/store': {
@@ -366,6 +419,13 @@ declare module '@tanstack/react-router' {
       path: '/api/health'
       fullPath: '/api/health'
       preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/indents': {
+      id: '/api/indents'
+      path: '/api/indents'
+      fullPath: '/api/indents'
+      preLoaderRoute: typeof ApiIndentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/inventory': {
@@ -459,12 +519,15 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BotsRoute: BotsRoute,
   InventoryRoute: InventoryRoute,
+  LoginRoute: LoginRoute,
   MachinesRoute: MachinesRoute,
   ManagementRoute: ManagementRoute,
+  RequestsRoute: RequestsRoute,
   StoreRoute: StoreRoute,
   SystemRoute: SystemRoute,
   ApiCatalogRoute: ApiCatalogRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiIndentsRoute: ApiIndentsRoute,
   ApiInventoryRoute: ApiInventoryRoute,
   ApiMachinesRoute: ApiMachinesRoute,
   ApiOpenapiDotjsonRoute: ApiOpenapiDotjsonRoute,
