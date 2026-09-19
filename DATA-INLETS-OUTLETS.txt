@@ -1,0 +1,158 @@
+============================================================================
+TCS-ERP BOT — DATA INLETS (INPUTS) AND OUTLETS (OUTPUTS)
+============================================================================
+Repo: src/routes (server handlers), src/lib (server functions)
+DB backend: Neon (when DATABASE_URL is set) or embedded PGLite fallback.
+Internal persisted store: items, machines, slips, slip_groups, movements,
+bots, bot_runs, alerts, audit_logs.
+
+------------------------------------------------------------------------------
+1. INLETS — EXTERNAL DATA ENTERING THE SYSTEM
+------------------------------------------------------------------------------
+
+A. HTTP REST INLETS (JSON request bodies / query params)
+
+  [POST]  /api/slips              Body: itemId, machineId, qty, hodConfirmed,
+                                  department, station, hodTitle, slipDate
+                                  -> creates a slip (store issue request)
+  [POST]  /api/slips/decide       Body: id, mode (stock|split|pr|reject)
+                                  -> store desk decision on a pending slip
+  [POST]  /api/slips/receive      Body: id
+                                  -> marks a raised PR as received; inbound
+                                  qty is added back to items.qty
+  [POST]  /api/indents            Body: date, department, machine, cell,
+                                  hodSignatureConfirmed,
+                                  items:[{itemId, quantity, description}]
+                                  -> multi-item indent -> slip_groups + slips
+  [POST]  /api/bots               Body: code, name, description, type,
+                                  status, cronExpr, config
+                                  -> creates a bot definition
+  [POST]  /api/bots/trigger       Body: id, input {itemCode, qty, poType,
+                                  currency, ...} (for RPA bot
+                                  BOT-TCS-PRPO / BOT-TCS-PR-PO)
+                                  -> kicks off a bot run (manual trigger)
+  [POST]  /api/alerts             Body: severity, title, message, botId,
+                                  itemId -> manual alert ingestion
+  [POST]  /api/alerts/acknowledge Body: id -> acknowledges an alert
+  [GET]   /api/runs?botId&limit   Query params as inputs -> bot run history
+  [GET]   /api/bots?status&type   Query params as inputs -> filter bots
+  [GET]   /api/slips?status       Query params as inputs -> filter slips
+  [GET]   /api/alerts?severity&acknowledged&limit -> filter alerts
+
+B. ENVIRONMENT INLET (secrets/configuration)
+
+  DATABASE_URL  -> switches DB backend (Neon vs PGLite)
+  TCS_USERNAME  -> ERP/RPA login used by the Python bot to create a PR/PO
+  TCS_PASSWORD  -> same
+  TCS_HEADLESS  -> headed vs headless browser for RPA runs
+  PYTHON_BIN    -> python interpreter used to spawn the RPA script
+
+C. RPA CHILD-PROCESS INLET (drive-by spawn)
+
+  Bot/create_pr_po.py  --item-code --qty --po-type --currency --item-desc
+      --vendor-code --vendor-desc --rate --site --account-site --category
+      --uom [--challan | --no-challan]
+  -> Python process spawns a browser against the external TCS ERP and
+     fills in the parts/requisition form.
+
+D. SEED / DEMO DATA INLET
+
+  lib/plant-server ensureSeed(sql)
+  -> idempotently seeds items, machines, movements, alerts so the UI has
+     initial data (runs once per DB, no-op when data exists).
+
+E. CLIENT-FACING INLETS (browser -> server)
+
+  TanStack server functions (createServerFn with zod validators):
+    createBot, updateBot, deleteBot, triggerBot, getBot, listBots,
+    listBotRuns, getBotStats, listAlerts, acknowledgeAlert, createAlert,
+    listAuditLogs  (lib/bot-server.ts, lib/bot.ts)
+  -> same logical inputs as the REST routes above, typed via zod.
+
+------------------------------------------------------------------------------
+2. OUTLETS — DATA LEAVING / BEING EMITTED BY THE SYSTEM
+------------------------------------------------------------------------------
+
+A. HTTP REST OUTLETS (JSON responses)
+
+  [GET] /api/health        -> { ok, service, version, timestamp, database }
+  [GET] /api/catalog       -> { items:[], machines:[] } reference data
+  [GET] /api/inventory     -> per-item rows: qty, reorderLevel, status,
+                              consumed30, received30, daysCover, weekly[]
+  [GET] /api/machines      -> per-machine rows: consumed30, distinctItems,
+                              topItem, item breakdown rows[]
+  [GET] /api/refill        -> { rows[], series[] } refill/reorder dashboard
+  [GET] /api/slips         -> slip objects (joined item/machine + onHand)
+  [POST] /api/slips/*      -> updated slip object (or error JSON)
+  [POST] /api/indents      -> created SlipGroup incl. full slip list
+  [GET] /api/bots          -> bot objects (code, type, status, cronExpr,
+                              config, last/nextRunAt, timestamps)
+  [POST] /api/bots         -> created bot object
+  [POST] /api/bots/trigger -> created bot_run object (input, output, error,
+                              status, durationMs) with prNumber on success
+  [GET] /api/runs          -> bot_run objects (output, error, triggerMeta)
+  [GET] /api/alerts        -> alert objects
+  [POST] /api/alerts/*     -> affected alert object
+  [GET] /api/openapi.json  -> OpenAPI 3.0.3 spec of the whole API surface
+
+B. PERSISTED OUTPUTS (writes to the database)
+
+  items.qty            <- decremented on issue, incremented on receive
+  movements            <- issue/receive rows (item, machine, slip, qty)
+  slips                <- status transitions: pending -> issued/partial/
+                          pr_open/rejected -> received
+  slip_groups          <- indent/group rows
+  bots                 <- definitions + last_run_at
+  bot_runs             <- every run: trigger, input, output, error,
+                          duration_ms (run history / audit)
+  alerts               <- generated on trigger success (PR created) and
+                          failure, plus seeded low/out-of-stock alerts
+  audit_logs           <- bot.create/update/delete/run, alert.ack
+
+C. EXTERNAL OUTLET — RPA TARGET (side effect)
+
+  The spawned Python bot (Bot/create_pr_po.py) drives the real TCS ERP
+  website and CREATEs a PR/requisition in the external system. The
+  generated PR number is scraped from stdout and returned to the API
+  caller as output.prNumber.
+
+D. SURFACE OUTLETS — UI / monitoring surfaces
+
+  TanStack client functions consume getBotStats, listAlerts, listBotRuns,
+  listAuditLogs, etc. -> rendered on /dashboard, /bots, /system,
+  /inventory, /machines, /store, /requests pages.
+  Alerts surface to the /system page + Bot Dashboard; unacknowledged
+  critical alerts are the primary operational output.
+
+------------------------------------------------------------------------------
+3. END-TO-END FLOWS (inlet -> process -> outlet)
+------------------------------------------------------------------------------
+
+F1. STORE ISSUE (shop-floor request)
+  POST /api/slips  ->  slip row (status=pending)
+  POST /api/slips/decide {mode} -> items.qty -= qty; movements[kind=issue];
+       slips -> issued/partial/pr_open/rejected; onHand served in response
+
+F2. INDENT -> PR -> RECEIVE (replenishment)
+  POST /api/indents -> slip_group + N slips (pending)
+  decide mode=pr   -> slip pr_open (nothing from rack)
+  POST /api/slips/receive -> items.qty += inbound; movements[kind=receive];
+       slip -> received
+
+F3. RPA PROCUREMENT BOT (BOT-TCS-PRPO / BOT-TCS-PR-PO)
+  POST /api/bots/trigger {itemCode, qty, poType, currency}
+    -> spawn create_pr_po.py with CLI args (item/qty/po/currency/...)
+    -> script drives external ERP, creates PR/PO
+    -> PR number parsed from stdout
+    -> bot_runs row written (input/output/error/status)
+    -> bots.last_run_at updated, alert created (PR created or failed)
+    -> bot_run returned to caller
+
+F4. SCHEDULED / SIMULATED BOTS
+  triggerBot (non-RPA) -> simulated run row with random pass/fail output;
+       logged to bot_runs + audit_logs for downstream summary stats.
+
+F5. MONITORING / ALERTS
+  ensureSeed + bot failures + RPA outcomes -> alerts table
+  GET /api/alerts* -> surfaced to UI /system page -> operator acknowledges
+  -> audit_logs.alert.ack written.
