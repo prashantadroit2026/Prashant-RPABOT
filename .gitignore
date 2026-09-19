@@ -1,16 +1,6 @@
-node_modules/
-dist/
-.vercel/
-.tanstack/
-.env
-Bot/.env
-Bot/logs/
-Bot/data/*.csv
-Bot/data/*.xlsx
-__pycache__/
-*.pyc
-.pytest_cache/
-.DS_Store
-screenshots/
-public/docs/*.pdf
-!public/docs/.gitkeep
+node_modules/dist/.vercel/.tanstack/.envBot/.envBot/logs/Bot/data/*.csvBot/data/*.xlsx__pycache__/*.pyc.pytest_cache/.DS_Storescreenshots/public/docs/*.pdf!public/docs/.gitkeep
+# Local backend dev artifacts
+procurement-backend/.env
+procurement-backend/secrets/
+procurement-backend/.venv/
+procurement-backend/*.log
