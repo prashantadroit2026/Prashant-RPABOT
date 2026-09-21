@@ -18,6 +18,21 @@ import { Route as ManagementRouteImport } from './routes/management'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as StoreRouteImport } from './routes/store'
 import { Route as SystemRouteImport } from './routes/system'
+import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiIndentsRouteImport } from './routes/api/indents'
+import { Route as ApiInventoryRouteImport } from './routes/api/inventory'
+import { Route as ApiMachinesRouteImport } from './routes/api/machines'
+import { Route as ApiOpenapiDotjsonRouteImport } from './routes/api/openapi[.]json'
+import { Route as ApiRefillRouteImport } from './routes/api/refill'
+import { Route as ApiRunsRouteImport } from './routes/api/runs'
+import { Route as ApiAlertsIndexRouteImport } from './routes/api/alerts/index'
+import { Route as ApiAlertsAcknowledgeRouteImport } from './routes/api/alerts/acknowledge'
+import { Route as ApiBotsIndexRouteImport } from './routes/api/bots/index'
+import { Route as ApiBotsTriggerRouteImport } from './routes/api/bots/trigger'
+import { Route as ApiSlipsIndexRouteImport } from './routes/api/slips/index'
+import { Route as ApiSlipsDecideRouteImport } from './routes/api/slips/decide'
+import { Route as ApiSlipsReceiveRouteImport } from './routes/api/slips/receive'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +79,81 @@ const SystemRoute = SystemRouteImport.update({
   path: '/system',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatalogRoute = ApiCatalogRouteImport.update({
+  id: '/api/catalog',
+  path: '/api/catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIndentsRoute = ApiIndentsRouteImport.update({
+  id: '/api/indents',
+  path: '/api/indents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInventoryRoute = ApiInventoryRouteImport.update({
+  id: '/api/inventory',
+  path: '/api/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMachinesRoute = ApiMachinesRouteImport.update({
+  id: '/api/machines',
+  path: '/api/machines',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOpenapiDotjsonRoute = ApiOpenapiDotjsonRouteImport.update({
+  id: '/api/openapi.json',
+  path: '/api/openapi.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRefillRoute = ApiRefillRouteImport.update({
+  id: '/api/refill',
+  path: '/api/refill',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRunsRoute = ApiRunsRouteImport.update({
+  id: '/api/runs',
+  path: '/api/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAlertsIndexRoute = ApiAlertsIndexRouteImport.update({
+  id: '/api/alerts/',
+  path: '/api/alerts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAlertsAcknowledgeRoute = ApiAlertsAcknowledgeRouteImport.update({
+  id: '/api/alerts/acknowledge',
+  path: '/api/alerts/acknowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBotsIndexRoute = ApiBotsIndexRouteImport.update({
+  id: '/api/bots/',
+  path: '/api/bots/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBotsTriggerRoute = ApiBotsTriggerRouteImport.update({
+  id: '/api/bots/trigger',
+  path: '/api/bots/trigger',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSlipsIndexRoute = ApiSlipsIndexRouteImport.update({
+  id: '/api/slips/',
+  path: '/api/slips/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSlipsDecideRoute = ApiSlipsDecideRouteImport.update({
+  id: '/api/slips/decide',
+  path: '/api/slips/decide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSlipsReceiveRoute = ApiSlipsReceiveRouteImport.update({
+  id: '/api/slips/receive',
+  path: '/api/slips/receive',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +165,21 @@ export interface FileRoutesByFullPath {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/api/catalog': typeof ApiCatalogRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
+  '/api/inventory': typeof ApiInventoryRoute
+  '/api/machines': typeof ApiMachinesRoute
+  '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
+  '/api/refill': typeof ApiRefillRoute
+  '/api/runs': typeof ApiRunsRoute
+  '/api/alerts/acknowledge': typeof ApiAlertsAcknowledgeRoute
+  '/api/bots/trigger': typeof ApiBotsTriggerRoute
+  '/api/slips/decide': typeof ApiSlipsDecideRoute
+  '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/alerts/': typeof ApiAlertsIndexRoute
+  '/api/bots/': typeof ApiBotsIndexRoute
+  '/api/slips/': typeof ApiSlipsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +191,21 @@ export interface FileRoutesByTo {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/api/catalog': typeof ApiCatalogRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
+  '/api/inventory': typeof ApiInventoryRoute
+  '/api/machines': typeof ApiMachinesRoute
+  '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
+  '/api/refill': typeof ApiRefillRoute
+  '/api/runs': typeof ApiRunsRoute
+  '/api/alerts/acknowledge': typeof ApiAlertsAcknowledgeRoute
+  '/api/bots/trigger': typeof ApiBotsTriggerRoute
+  '/api/slips/decide': typeof ApiSlipsDecideRoute
+  '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/alerts': typeof ApiAlertsIndexRoute
+  '/api/bots': typeof ApiBotsIndexRoute
+  '/api/slips': typeof ApiSlipsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +218,21 @@ export interface FileRoutesById {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/api/catalog': typeof ApiCatalogRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/indents': typeof ApiIndentsRoute
+  '/api/inventory': typeof ApiInventoryRoute
+  '/api/machines': typeof ApiMachinesRoute
+  '/api/openapi.json': typeof ApiOpenapiDotjsonRoute
+  '/api/refill': typeof ApiRefillRoute
+  '/api/runs': typeof ApiRunsRoute
+  '/api/alerts/acknowledge': typeof ApiAlertsAcknowledgeRoute
+  '/api/bots/trigger': typeof ApiBotsTriggerRoute
+  '/api/slips/decide': typeof ApiSlipsDecideRoute
+  '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/alerts/': typeof ApiAlertsIndexRoute
+  '/api/bots/': typeof ApiBotsIndexRoute
+  '/api/slips/': typeof ApiSlipsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +246,21 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/api/catalog'
+    | '/api/health'
+    | '/api/indents'
+    | '/api/inventory'
+    | '/api/machines'
+    | '/api/openapi.json'
+    | '/api/refill'
+    | '/api/runs'
+    | '/api/alerts/acknowledge'
+    | '/api/bots/trigger'
+    | '/api/slips/decide'
+    | '/api/slips/receive'
+    | '/api/alerts/'
+    | '/api/bots/'
+    | '/api/slips/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +272,21 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/api/catalog'
+    | '/api/health'
+    | '/api/indents'
+    | '/api/inventory'
+    | '/api/machines'
+    | '/api/openapi.json'
+    | '/api/refill'
+    | '/api/runs'
+    | '/api/alerts/acknowledge'
+    | '/api/bots/trigger'
+    | '/api/slips/decide'
+    | '/api/slips/receive'
+    | '/api/alerts'
+    | '/api/bots'
+    | '/api/slips'
   id:
     | '__root__'
     | '/'
@@ -133,6 +298,21 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/api/catalog'
+    | '/api/health'
+    | '/api/indents'
+    | '/api/inventory'
+    | '/api/machines'
+    | '/api/openapi.json'
+    | '/api/refill'
+    | '/api/runs'
+    | '/api/alerts/acknowledge'
+    | '/api/bots/trigger'
+    | '/api/slips/decide'
+    | '/api/slips/receive'
+    | '/api/alerts/'
+    | '/api/bots/'
+    | '/api/slips/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +325,21 @@ export interface RootRouteChildren {
   RequestsRoute: typeof RequestsRoute
   StoreRoute: typeof StoreRoute
   SystemRoute: typeof SystemRoute
+  ApiCatalogRoute: typeof ApiCatalogRoute
+  ApiHealthRoute: typeof ApiHealthRoute
+  ApiIndentsRoute: typeof ApiIndentsRoute
+  ApiInventoryRoute: typeof ApiInventoryRoute
+  ApiMachinesRoute: typeof ApiMachinesRoute
+  ApiOpenapiDotjsonRoute: typeof ApiOpenapiDotjsonRoute
+  ApiRefillRoute: typeof ApiRefillRoute
+  ApiRunsRoute: typeof ApiRunsRoute
+  ApiAlertsAcknowledgeRoute: typeof ApiAlertsAcknowledgeRoute
+  ApiBotsTriggerRoute: typeof ApiBotsTriggerRoute
+  ApiSlipsDecideRoute: typeof ApiSlipsDecideRoute
+  ApiSlipsReceiveRoute: typeof ApiSlipsReceiveRoute
+  ApiAlertsIndexRoute: typeof ApiAlertsIndexRoute
+  ApiBotsIndexRoute: typeof ApiBotsIndexRoute
+  ApiSlipsIndexRoute: typeof ApiSlipsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +407,111 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SystemRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/catalog': {
+      id: '/api/catalog'
+      path: '/api/catalog'
+      fullPath: '/api/catalog'
+      preLoaderRoute: typeof ApiCatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/indents': {
+      id: '/api/indents'
+      path: '/api/indents'
+      fullPath: '/api/indents'
+      preLoaderRoute: typeof ApiIndentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/inventory': {
+      id: '/api/inventory'
+      path: '/api/inventory'
+      fullPath: '/api/inventory'
+      preLoaderRoute: typeof ApiInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/machines': {
+      id: '/api/machines'
+      path: '/api/machines'
+      fullPath: '/api/machines'
+      preLoaderRoute: typeof ApiMachinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/openapi.json': {
+      id: '/api/openapi.json'
+      path: '/api/openapi.json'
+      fullPath: '/api/openapi.json'
+      preLoaderRoute: typeof ApiOpenapiDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/refill': {
+      id: '/api/refill'
+      path: '/api/refill'
+      fullPath: '/api/refill'
+      preLoaderRoute: typeof ApiRefillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/runs': {
+      id: '/api/runs'
+      path: '/api/runs'
+      fullPath: '/api/runs'
+      preLoaderRoute: typeof ApiRunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/alerts/': {
+      id: '/api/alerts/'
+      path: '/api/alerts'
+      fullPath: '/api/alerts/'
+      preLoaderRoute: typeof ApiAlertsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/alerts/acknowledge': {
+      id: '/api/alerts/acknowledge'
+      path: '/api/alerts/acknowledge'
+      fullPath: '/api/alerts/acknowledge'
+      preLoaderRoute: typeof ApiAlertsAcknowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/bots/': {
+      id: '/api/bots/'
+      path: '/api/bots'
+      fullPath: '/api/bots/'
+      preLoaderRoute: typeof ApiBotsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/bots/trigger': {
+      id: '/api/bots/trigger'
+      path: '/api/bots/trigger'
+      fullPath: '/api/bots/trigger'
+      preLoaderRoute: typeof ApiBotsTriggerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/slips/': {
+      id: '/api/slips/'
+      path: '/api/slips'
+      fullPath: '/api/slips/'
+      preLoaderRoute: typeof ApiSlipsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/slips/decide': {
+      id: '/api/slips/decide'
+      path: '/api/slips/decide'
+      fullPath: '/api/slips/decide'
+      preLoaderRoute: typeof ApiSlipsDecideRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/slips/receive': {
+      id: '/api/slips/receive'
+      path: '/api/slips/receive'
+      fullPath: '/api/slips/receive'
+      preLoaderRoute: typeof ApiSlipsReceiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,6 +525,21 @@ const rootRouteChildren: RootRouteChildren = {
   RequestsRoute: RequestsRoute,
   StoreRoute: StoreRoute,
   SystemRoute: SystemRoute,
+  ApiCatalogRoute: ApiCatalogRoute,
+  ApiHealthRoute: ApiHealthRoute,
+  ApiIndentsRoute: ApiIndentsRoute,
+  ApiInventoryRoute: ApiInventoryRoute,
+  ApiMachinesRoute: ApiMachinesRoute,
+  ApiOpenapiDotjsonRoute: ApiOpenapiDotjsonRoute,
+  ApiRefillRoute: ApiRefillRoute,
+  ApiRunsRoute: ApiRunsRoute,
+  ApiAlertsAcknowledgeRoute: ApiAlertsAcknowledgeRoute,
+  ApiBotsTriggerRoute: ApiBotsTriggerRoute,
+  ApiSlipsDecideRoute: ApiSlipsDecideRoute,
+  ApiSlipsReceiveRoute: ApiSlipsReceiveRoute,
+  ApiAlertsIndexRoute: ApiAlertsIndexRoute,
+  ApiBotsIndexRoute: ApiBotsIndexRoute,
+  ApiSlipsIndexRoute: ApiSlipsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

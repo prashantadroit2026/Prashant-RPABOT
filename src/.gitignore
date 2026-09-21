@@ -15,3 +15,5 @@ screenshots/
 .data/
 public/docs/*.pdf
 !public/docs/.gitkeep
+
+.vercel
