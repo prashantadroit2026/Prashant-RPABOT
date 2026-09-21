@@ -32,3 +32,9 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Grok sandbox chrome (not used for the local project)
+src/.grok/
+src/AGENTS.md
+src/.node_modules.lock
+src/startup.sh

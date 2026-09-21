@@ -130,7 +130,35 @@ All paths already match the ones used in `src/lib/plant-server.ts` and `src/lib/
 
 ---
 
-## 7. Production notes
+## 7. Deploy to Render
+
+The repo root contains a `render.yaml` blueprint so the dashboard can start the
+backend with one click.
+
+1. Push the backend to GitHub (the `Procurement Hub backend` commit already
+   includes `procurement-backend/` + `render.yaml`).
+2. In the Render dashboard: **New → Blueprint** → select the GitHub repo →
+   **Apply**.
+3. Before the first deploy, set these env vars on the service
+   (`Environment` tab):
+   | Key | Value |
+   |-----|-------|
+   | `GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT` | paste the **full service-account JSON** (no quotes) |
+   | `GOOGLE_SHEET_ID` | spreadsheet URL id |
+   | `DEBUG` | `false` |
+   | `SEED_ON_START` | `false` |
+   | `CORS_ORIGINS` | `["*"]` (adjust to your frontend domain) |
+4. Render runs `uvicorn main:app --host 0.0.0.0 --port $PORT`. Health check at
+   `/api/health`.
+
+The service account JSON stays a Render secret — it is never committed. Locally
+you can use a file via `GOOGLE_SERVICE_ACCOUNT_JSON` or inline JSON via
+`GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT` (Render/my). The sheet is shared (Editor)
+with the same service-account email already.
+
+---
+
+## 8. Production notes
 
 - Restrict CORS origins.
 - Keep the service-account JSON outside the repo and inject it via environment / secret manager.

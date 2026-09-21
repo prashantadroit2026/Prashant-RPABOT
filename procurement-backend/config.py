@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     )
 
     google_service_account_json: str = "./service-account.json"
+    google_service_account_json_content: str = ""
     google_sheet_id: str = ""
     host: str = "0.0.0.0"
     port: int = 8080

@@ -34,10 +34,18 @@ WORKSHEETS = [
 
 @lru_cache(maxsize=1)
 def get_client() -> gspread.Client:
+    # Prefer inline JSON (Render / secret-manager friendly) over a local file.
+    if settings.google_service_account_json_content:
+        creds = Credentials.from_service_account_info(
+            json.loads(settings.google_service_account_json_content), scopes=SCOPES
+        )
+        return gspread.authorize(creds)
+
     path = settings.credentials_path
     if not path.exists():
         raise FileNotFoundError(
-            f"Service account JSON not found at {path}. "
+            "Service account not found. Set GOOGLE_SERVICE_ACCOUNT_JSON to a file "
+            "path OR GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT to the full JSON key. "
             "Download it from Google Cloud Console → IAM → Service Accounts."
         )
     creds = Credentials.from_service_account_file(str(path), scopes=SCOPES)
