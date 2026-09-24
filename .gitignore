@@ -19,13 +19,23 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.venv-workers/
 venv/
+python_modules/
 
 # Node / frontend
 node_modules/
 dist/
 build/
 *.tsbuildinfo
+
+# Vercel local project binding
+.vercel/
+
+# Cloudflare / Wrangler local files
+.wrangler/
+.dev.vars
+.dev.vars.*
 
 # IDE / OS
 .vscode/

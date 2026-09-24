@@ -70,6 +70,22 @@ On first start the backend will:
 - create the worksheets (`items`, `machines`, `slips`, …) if they do not exist
 - seed demo data (5 items, 3 machines, 1 TCS bot) when the sheets are empty
 
+### Run with Docker (recommended for production-style deploys)
+
+```bash
+# from the repo root
+docker compose up --build -d
+```
+
+- Builds `procurement-backend/Dockerfile` (`python:3.12-slim`, non-root user).
+- Reads env from `procurement-backend/.env` (`GOOGLE_SERVICE_ACCOUNT_JSON`,
+  `GOOGLE_SHEET_ID`, …). For a runtime-only secret (no file), set
+  `GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT` instead.
+- Exposes http://localhost:8080, health check at `/api/health`.
+
+The image deliberately does NOT contain `secrets/`, `.env`, logs, or the venv
+(see `.dockerignore`).
+
 ---
 
 ## 4. Example calls
@@ -132,8 +148,8 @@ All paths already match the ones used in `src/lib/plant-server.ts` and `src/lib/
 
 ## 7. Deploy to Render
 
-The repo root contains a `render.yaml` blueprint so the dashboard can start the
-backend with one click.
+The repo root contains a `render.yaml` blueprint; the service builds the
+`Dockerfile` in this folder (`runtime: docker`).
 
 1. Push the backend to GitHub (the `Procurement Hub backend` commit already
    includes `procurement-backend/` + `render.yaml`).

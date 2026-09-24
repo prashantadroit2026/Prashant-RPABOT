@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+.env
+.env.*
+secrets/
+sheets_data/
+.git/
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+render.yaml
+README.md
+*.md

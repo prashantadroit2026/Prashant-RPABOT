@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "procurement-hub-backend",
+  "main": "src/worker.py",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["python_workers"],
+  "vars": {
+    "DEBUG": "false",
+    "SEED_ON_START": "false"
+  },
+  "env": {
+    "worker": {
+      "use_in_development": true
+    }
+  }
+}

@@ -6,9 +6,15 @@ Expected columns on the "Item Request" tab (exact names; order does not matter):
   RequestID | Item Code | Vendor Code | Item Quantity | UOM | Site |
   TCS Status | TCS Requisition No | TCS PO No | TCS Error | TCS Updated At
 
-Flow per pending row:
+Flow:
   pending -> processing -> pr_done -> po_done      (terminal success)
                              -> failed             (any PR or PO failure, error in TCS Error)
+
+Multi-item orders: rows sharing the same RequestID are batched into ONE PR
+then ONE PO. Within a shared RequestID the items are further split by vendor
+(a PR carries a single party), so an order spanning two vendors becomes two
+PR/PO pairs. The PR/PO numbers and status are written back to EVERY row of
+the batch. Rows with a unique RequestID keep the old 1-row-1-PR behaviour.
 
 The worker never reads TCS on its own. It spawns the bots as subprocesses and
 parses the JSON on the last stdout line of each bot:
@@ -316,76 +322,139 @@ def _run_bot(script: Path, payload: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Row processing
+# Batch processing (single item or multi-item order)
 # ---------------------------------------------------------------------------
 
-def _process(sh, ws, cmap: dict, rec: dict) -> bool:
-    rid = rec["request_id"]
-    item = rec["item_code"]
-    qty = rec["qty"]
+def _resolve_item_meta(sh, rec: dict) -> tuple[str, str, str]:
+    """Return (vendor, site, uom) for a candidate, resolving from Item data when blank."""
     vendor = rec["vendor"]
     site = rec["site"]
     uom = rec["uom"]
-    now = datetime.now().isoformat()
-    _log(f"[{rid}] starting {item} qty={qty}")
-
-    # 1. claim + resolve vendor from Item data if missing
-    if not vendor:
-        look = _lookup_item(sh, item)
-        vendor = look.get("vendor") or ""
+    if not (vendor and site and uom):
+        look = _lookup_item(sh, rec["item_code"])
+        vendor = vendor or look.get("vendor") or ""
         site = site or look.get("site") or ""
         uom = uom or look.get("uom") or ""
-        if vendor:
-            _log(f"[{rid}] vendor {vendor} resolved from Item data")
+    return vendor, site, uom
+
+
+def _build_batches(sh, candidates: list[dict]) -> list[dict]:
+    """Group pending rows by RequestID, then split each group by vendor.
+
+    Each batch:
+      {request_id, vendor, site, item_list:{item_code}, items:[{row, item_code, qty, uom, site}]}
+    """
+    by_request: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for rec in candidates:
+        rid = rec["request_id"]
+        if rid not in by_request:
+            by_request[rid] = []
+            order.append(rid)
+        by_request[rid].append(rec)
+
+    batches: list[dict] = []
+    for rid in order:
+        by_vendor: dict[str, dict] = {}
+        for rec in by_request[rid]:
+            vendor, site, uom = _resolve_item_meta(sh, rec)
+            if vendor not in by_vendor:
+                by_vendor[vendor] = {
+                    "request_id": rid,
+                    "vendor": vendor,
+                    "site": site,
+                    "items": [],
+                }
+            by_vendor[vendor]["items"].append({
+                "row": rec["row"],
+                "item_code": rec["item_code"],
+                "qty": rec["qty"],
+                "uom": uom,
+                "site": site,
+            })
+        batches.extend(by_vendor.values())
+    return batches
+
+
+def _batch_item_codes(batch: dict) -> str:
+    return ", ".join(it["item_code"] for it in batch["items"])
+
+
+def _mark(ws, cmap: dict, batch: dict, now: str, *, status=None, pr_no=None, po_no=None, error=None) -> None:
+    """Write shared PR/PO/status fields to every row of the batch."""
+    for it in batch["items"]:
+        _write(
+            ws, it["row"], cmap, now,
+            status=status, pr_no=pr_no, po_no=po_no, error=error,
+            vendor=batch["vendor"],
+        )
+
+
+def _process_batch(sh, ws, cmap: dict, batch: dict) -> bool:
+    rid = batch["request_id"]
+    vendor = batch["vendor"]
+    bounds = _batch_item_codes(batch)
+    n_items = len(batch["items"])
+    _log(f"[{rid}] starting batch vendor={vendor or '(none)'} items={n_items} ({bounds})")
+
+    # 1. every item must resolve to a vendor before we talk to TCS
     if not vendor:
-        _write(ws, rec["row"], cmap, now, status="failed", error="Vendor Code missing and Item data lookup returned none")
+        err = f"Vendor Code missing for {rid} and Item data lookup returned none — items: {bounds}"
+        _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error=err)
         return False
 
-    _write(ws, rec["row"], cmap, now, status="processing", error="", vendor=vendor)
+    _mark(ws, cmap, batch, datetime.now().isoformat(), status="processing", error="")
 
-    # 2. PR
+    # 2. PR — one run per batch with every item as a line
     pr_payload = {
         "action": "create_pr",
-        "itemCode": item,
-        "qty": qty,
         "vendorCode": vendor,
         "requestId": rid,
-        "site": site,
-        "uom": uom,
+        "site": batch["site"],
+        "items": [
+            {"itemCode": it["item_code"], "qty": it["qty"], "uom": it["uom"]}
+            for it in batch["items"]
+        ],
     }
     pr_res = _run_bot(
         _bot_path("PR_BOT_PATH", "Requisition/PR_combined.py", "PR Approver/PR_combined.py"),
         pr_payload,
     )
+    _log(f"[{rid}] PR bot result: {json.dumps(pr_res, ensure_ascii=False)[:1000]}")
     if not pr_res.get("ok"):
-        _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="failed", error=pr_res.get("error") or "PR bot failed")
+        _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error=pr_res.get("error") or "PR bot failed")
         return False
-    pr_no = str(pr_res.get("prNumber") or "").strip()
+    pr_no = str(pr_res.get("prNumber") or pr_res.get("pr_number") or "").strip()
     if not pr_no:
-        _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="failed", error="PR bot ok but no prNumber in output")
+        _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error="PR bot ok but no prNumber in output")
         return False
-    _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="pr_done", pr_no=pr_no)
-    _log(f"[{rid}] PR {pr_no} done")
+    _mark(ws, cmap, batch, datetime.now().isoformat(), status="pr_done", pr_no=pr_no)
+    _log(f"[{rid}] PR {pr_no} done ({n_items} item(s))")
 
-    # 3. PO
+    # 3. PO — one run per batch from the same PR
     po_payload = {
         "action": "create_po",
         "prNumber": pr_no,
+        "pr_number": pr_no,
         "vendorCode": vendor,
-        "itemCode": item,
-        "qty": qty,
+        "vendor_code": vendor,
         "requestId": rid,
+        "items": [
+            {"itemCode": it["item_code"], "qty": it["qty"], "uom": it["uom"]}
+            for it in batch["items"]
+        ],
     }
     po_res = _run_bot(_bot_path("PO_BOT_PATH", "Purchase Order/PO_combined.py"), po_payload)
+    _log(f"[{rid}] PO bot result: {json.dumps(po_res, ensure_ascii=False)[:1000]}")
     if not po_res.get("ok"):
-        _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="failed", error=po_res.get("error") or "PO bot failed")
+        _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error=po_res.get("error") or "PO bot failed")
         return False
-    po_no = str(po_res.get("poNumber") or "").strip()
+    po_no = str(po_res.get("poNumber") or po_res.get("po_number") or "").strip()
     if not po_no:
-        _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="failed", error="PO bot ok but no poNumber in output")
+        _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error="PO bot ok but no poNumber in output")
         return False
-    _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="po_done", po_no=po_no)
-    _log(f"[{rid}] PO {po_no} done — finished")
+    _mark(ws, cmap, batch, datetime.now().isoformat(), status="po_done", po_no=po_no)
+    _log(f"[{rid}] PO {po_no} done — finished ({n_items} item(s))")
     return True
 
 
@@ -408,21 +477,23 @@ def run_once(dry_run: bool = False) -> list:
         _log("no pending rows")
         return []
     _log(f"pending rows: {[c['request_id'] for c in candidates]}")
+    batches = _build_batches(sh, candidates)
     if dry_run:
-        for c in candidates:
-            _log(f"[dry-run] would process {c['request_id']} item {c['item_code']} qty {c['qty']}")
+        for b in batches:
+            vendor = b["vendor"] or "(missing — will fail)"
+            _log(f"[dry-run] batch {b['request_id']} vendor={vendor} items={_batch_item_codes(b)}")
         return candidates
 
     results = []
-    for rec in candidates:
+    for batch in batches:
         try:
-            ok = _process(sh, ws, cmap, rec)
-            results.append({"request_id": rec["request_id"], "ok": ok})
+            ok = _process_batch(sh, ws, cmap, batch)
+            results.append({"request_id": batch["request_id"], "ok": ok})
         except Exception:
             err = traceback.format_exc(limit=3)
-            _log(f"[{rec['request_id']}] crashed: {err}")
-            _write(ws, rec["row"], cmap, datetime.now().isoformat(), status="failed", error="worker exception")
-            results.append({"request_id": rec["request_id"], "ok": False, "error": "worker exception"})
+            _log(f"[{batch['request_id']}] crashed: {err}")
+            _mark(ws, cmap, batch, datetime.now().isoformat(), status="failed", error="worker exception")
+            results.append({"request_id": batch["request_id"], "ok": False, "error": "worker exception"})
     return results
 
 

@@ -941,11 +941,76 @@ def _norm_qty(value) -> str:
         return v
 
 
+def _derive_account_site(site: str) -> str:
+    """Account site derived from the physical site, or env default ('' = leave default)."""
+    if not site:
+        return ""
+    s_low = site.lower()
+    if "driveshaft" in s_low:
+        return "ADROIT DRIVESHAFT"
+    if "indore" in s_low:
+        return "ADROIT INDORE"
+    return os.getenv("FORM_DEFAULT_ACCOUNT_SITE", "")
+
+
+def _build_multi_item_pr(item_list: list) -> dict:
+    """Build a multi-line PR data dict from an items[] payload fragment."""
+    today = datetime.now().strftime("%d/%m/%Y")
+    items = []
+    for raw in item_list:
+        code = str(raw.get("itemCode") or raw.get("item_code") or "").strip()
+        if not code:
+            raise ValueError("each entry in items needs itemCode")
+        qty = _norm_qty(
+            raw.get("itemQuantity")
+            or raw.get("item_quantity")
+            or raw.get("quantity")
+            or raw.get("qty")
+            or 1
+        )
+        uom = str(raw.get("uom") or "").strip() or os.getenv("FORM_DEFAULT_UOM", "NOS")
+        desc = str(
+            raw.get("itemDesc")
+            or raw.get("itemDescription")
+            or raw.get("description")
+            or ""
+        ).strip() or code
+        items.append({
+            "item_code": code,
+            "item_desc": desc,
+            "ac_code": str(raw.get("acCode") or raw.get("ac_code") or "").strip(),
+            "req_date": today,
+            "uom": uom,
+            "pack_size": "",
+            "pack_qty": "",
+            "qty": qty,
+            "base_uom": uom,
+            "base_qty": qty,
+            "rate": str(raw.get("rate") or "").strip(),
+            "amount": str(raw.get("amount") or "").strip(),
+        })
+    if not items:
+        raise ValueError("items must contain at least one item with itemCode")
+    codes = [it["item_code"] for it in items]
+    head = ", ".join(codes[:3]) + ("…" if len(codes) > 3 else "")
+    data = build_one_shot_pr(items[0]["item_code"], items[0]["qty"])
+    data["description"] = f"PR for {head}"
+    data["remarks"] = f"Auto PR for {head}"
+    data["items"] = items
+    return data
+
+
 def build_pr_from_json(payload: dict) -> dict:
     """Map the create_pr JSON payload to a PR data dict.
 
-    Contract fields (aliases accepted):
-      itemCode / item_code             (required)
+    Simplified contract (new format):
+      item_code / itemCode              (required)
+      item_description / itemDescription (optional, defaults to item_code)
+      item_quantity / itemQuantity      (required)
+      request_code / requestCode        (optional)
+
+    Legacy contract fields (still supported):
+      itemCode / item_code
       itemQuantity / item_quantity / quantity / qty
       vendorCode / vendor_code
       site
@@ -953,51 +1018,83 @@ def build_pr_from_json(payload: dict) -> dict:
       uom
       requestId / request_id
       itemDesc / itemDescription / description
+
+    Multi-item form:
+      items: [{ itemCode, qty, uom?, itemDesc? }, ...]  -> one PR, N line items
     """
-    item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
-    if not item_code:
-        raise ValueError("itemCode is required")
-    qty = _norm_qty(
-        payload.get("itemQuantity")
-        or payload.get("item_quantity")
-        or payload.get("quantity")
-        or payload.get("qty")
+    # Try simplified format first
+    item_code = str(payload.get("item_code") or payload.get("itemCode") or "").strip()
+    item_description = str(payload.get("item_description") or payload.get("itemDescription") or "").strip()
+    item_quantity = _norm_qty(
+        payload.get("item_quantity") 
+        or payload.get("itemQuantity") 
+        or payload.get("quantity") 
+        or payload.get("qty") 
         or 1
     )
+    request_code = str(payload.get("request_code") or payload.get("requestCode") or payload.get("requestId") or "").strip()
+    
+    # Use simplified format if item_code is provided
+    if item_code:
+        if not item_description:
+            item_description = item_code
+        data = build_one_shot_pr(item_code, item_quantity)
+        data["description"] = item_description
+        data["items"][0]["item_desc"] = item_description
+        data["request_id"] = request_code
+        if request_code:
+            data["remarks"] = f"Request Code: {request_code}"
+        return data
+    
+    # Fall back to legacy format
+    items_raw = payload.get("items")
+    if isinstance(items_raw, list):
+        if not items_raw:
+            raise ValueError("items must contain at least one item with itemCode")
+        data = _build_multi_item_pr(items_raw)
+    else:
+        item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
+        if not item_code:
+            raise ValueError("itemCode is required")
+        qty = _norm_qty(
+            payload.get("itemQuantity")
+            or payload.get("item_quantity")
+            or payload.get("quantity")
+            or payload.get("qty")
+            or 1
+        )
+        data = build_one_shot_pr(item_code, qty)
+        item_desc = str(
+            payload.get("itemDesc")
+            or payload.get("itemDescription")
+            or payload.get("description")
+            or ""
+        ).strip()
+        if item_desc:
+            data["description"] = item_desc
+            data["items"][0]["item_desc"] = item_desc
+        uom = str(payload.get("uom") or "").strip()
+        if uom:
+            data["items"][0]["uom"] = uom
+            data["items"][0]["base_uom"] = uom
+
     vendor = str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()
     request_id = str(payload.get("requestId") or payload.get("request_id") or "").strip()
     site = str(payload.get("site") or "").strip()
-    uom = str(payload.get("uom") or "").strip()
-    item_desc = str(
-        payload.get("itemDesc")
-        or payload.get("itemDescription")
-        or payload.get("description")
-        or ""
-    ).strip()
     date_raw = payload.get("date") or payload.get("transactionDate") or payload.get("transaction_date")
 
-    data = build_one_shot_pr(item_code, qty)
-    if item_desc:
-        data["description"] = item_desc
-        data["items"][0]["item_desc"] = item_desc
     if date_raw:
         data["transaction_date"] = _format_date_value(date_raw)
-        data["items"][0]["req_date"] = data["transaction_date"]
+        for it in data["items"]:
+            it["req_date"] = data["transaction_date"]
     if vendor:
         data["party_code"] = vendor
         data["party_desc"] = vendor
-    if uom:
-        data["items"][0]["uom"] = uom
-        data["items"][0]["base_uom"] = uom
     if site:
         data["site"] = site
-        s_low = (site or "").lower()
-        if "driveshaft" in s_low:
-            data["account_site"] = "ADROIT DRIVESHAFT"
-        elif "indore" in s_low:
-            data["account_site"] = "ADROIT INDORE"
-        elif os.getenv("FORM_DEFAULT_ACCOUNT_SITE"):
-            data["account_site"] = os.getenv("FORM_DEFAULT_ACCOUNT_SITE")
+        acct = _derive_account_site(site)
+        if acct:
+            data["account_site"] = acct
     data["remarks"] = (data.get("remarks") or "") + (
         f" | RequestID: {request_id}" if request_id else ""
     )
@@ -1019,28 +1116,66 @@ def _load_json_input(path: str) -> dict:
 
 
 def run_json_pr(payload: dict) -> dict:
-    """Run a single PR from the create_pr JSON contract. Result JSON = last stdout line."""
+    """Run a single PR from simplified JSON contract.
+    
+    Input format:
+    {
+        "item_code": "PCPWB60132",
+        "item_description": "PCPWB60132 Bearing",
+        "item_quantity": 50,
+        "request_code": "REQ-001"
+    }
+    
+    Output format:
+    {
+        "ok": true,
+        "pr_number": "AD/2627/PR/0001",
+        "status": "created"
+    }
+    """
     started = time.time()
-    item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
-    vendor = str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()
-    request_id = str(payload.get("requestId") or payload.get("request_id") or "").strip()
-    qty = _norm_qty(
-        payload.get("itemQuantity")
-        or payload.get("item_quantity")
-        or payload.get("quantity")
-        or payload.get("qty")
+    
+    # Simplified input parsing
+    item_code = str(payload.get("item_code") or payload.get("itemCode") or "").strip()
+    item_description = str(payload.get("item_description") or payload.get("itemDescription") or item_code).strip()
+    item_quantity = _norm_qty(
+        payload.get("item_quantity") 
+        or payload.get("itemQuantity") 
+        or payload.get("quantity") 
+        or payload.get("qty") 
         or 1
     )
+    request_code = str(payload.get("request_code") or payload.get("requestCode") or payload.get("requestId") or "").strip()
+    
+    # Support legacy format for backward compatibility
+    items_raw = payload.get("items")
+    if isinstance(items_raw, list) and items_raw:
+        first = items_raw[0]
+        if not item_code:
+            item_code = str(first.get("itemCode") or first.get("item_code") or "").strip()
+        if not item_description:
+            item_description = str(first.get("itemDescription") or first.get("item_description") or first.get("item_desc") or item_code).strip()
+        if not item_quantity or item_quantity == 1:
+            item_quantity = _norm_qty(
+                first.get("itemQuantity")
+                or first.get("item_quantity")
+                or first.get("quantity")
+                or first.get("qty")
+                or 1
+            )
+    
+    vendor = str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()
 
     result = {
         "ok": False,
         "action": "create_pr",
-        "prNumber": None,
+        "pr_number": None,
         "status": None,
-        "itemCode": item_code,
-        "qty": qty,
-        "requestId": request_id,
-        "vendorCode": vendor,
+        "item_code": item_code,
+        "item_description": item_description,
+        "item_quantity": item_quantity,
+        "request_code": request_code,
+        "vendor_code": vendor,
         "transactionDate": _format_date_value(
             payload.get("date")
             or payload.get("transactionDate")
@@ -1073,7 +1208,7 @@ def run_json_pr(payload: dict) -> dict:
             if not req_no:
                 return _fail("save failed / no requisition number returned")
             result["ok"] = True
-            result["prNumber"] = req_no
+            result["pr_number"] = req_no
             result["status"] = "approved" if approved else "saved"
             result["durationMs"] = int((time.time() - started) * 1000)
             return result
@@ -1409,7 +1544,7 @@ def main() -> int:
     parser.add_argument(
         "--json",
         default=None,
-        help="JSON input file (create_pr contract: action/itemCode/qty/vendorCode/requestId)",
+        help="JSON input file (simplified: item_code/item_description/item_quantity/request_code OR legacy: itemCode/qty/vendorCode/requestId)",
     )
 
     args = parser.parse_args()

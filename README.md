@@ -6,7 +6,7 @@ End-to-end purchasing automation: a Google-Sheets-backed FastAPI backend, Playwr
 
 | Path | Purpose |
 | ---- | ------- |
-| `worker_pr_po.py` | Queue worker: reads pending rows from the Google Sheet `Item Request` tab, spawns the PR bot then the PO bot, writes outcomes back. |
+| `worker_pr_po.py` | Queue worker: reads pending rows from the Google Sheet `Item Request` tab, spawns the PR bot then the PO bot, writes outcomes back. Rows sharing a `RequestID` are batched into one PR + one PO (split per vendor); unique `RequestID`s stay 1-row-1-PR. |
 | `PR Approver/` | PR bot `PR_combined.py` (+ `bot_api.py`, `email_approver.py`, `approve_and_po.py`, `examples/`). |
 | `Purchase Order/` | PO bot `PO_combined.py` (wrapper `PO.py`). |
 | `requisition.py`, `fill_requisition.py` | Shared modules imported by both bots (keep at root). |

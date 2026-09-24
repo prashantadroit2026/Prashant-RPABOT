@@ -1352,24 +1352,71 @@ def _capture_po_number(page) -> str | None:
 
 
 def build_po_from_json(payload: dict) -> dict:
-    """Map the create_po JSON payload to PO data used by create_po_from_pr."""
-    item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
-    if not item_code:
-        raise ValueError("itemCode is required")
-    qty = str(payload.get("qty") or payload.get("quantity") or 1)
-    uom = str(payload.get("uom") or "").strip() or os.getenv("FORM_DEFAULT_UOM", "NOS")
-    vendor = str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()
-    return {
-        "pr_number": str(payload.get("prNumber") or payload.get("pr_number") or "").strip(),
-        "header": {"vendor_code": vendor},
-        "items": [{
+    """Map the create_po JSON payload to PO data used by create_po_from_pr.
+
+    Simplified contract (new format):
+      pr_number / prNumber              (required)
+      vendor_code / vendorCode          (required)
+
+    Legacy contract fields (still supported):
+      Single-item:  itemCode (required), qty, uom, vendorCode
+      Multi-item:   items: [{itemCode, qty, uom?}, ...] -> one PO, N lines
+    """
+    # Try simplified format first
+    pr_number = str(payload.get("pr_number") or payload.get("prNumber") or "").strip()
+    vendor_code = str(payload.get("vendor_code") or payload.get("vendorCode") or "").strip()
+    
+    # Use simplified format if both pr_number and vendor_code are provided
+    if pr_number and vendor_code:
+        return {
+            "pr_number": pr_number,
+            "header": {"vendor_code": vendor_code},
+            "items": [],  # Items will be loaded from PR
+        }
+    
+    # Fall back to legacy format
+    uom_default = os.getenv("FORM_DEFAULT_UOM", "NOS")
+    items_raw = payload.get("items")
+    if isinstance(items_raw, list):
+        if not items_raw:
+            raise ValueError("items must contain at least one item with itemCode")
+        items = []
+        for raw in items_raw:
+            code = str(raw.get("itemCode") or raw.get("item_code") or "").strip()
+            if not code:
+                continue
+            qty = str(raw.get("qty") or raw.get("quantity") or raw.get("itemQuantity") or 1)
+            uom = str(raw.get("uom") or "").strip() or uom_default
+            items.append({
+                "item_code": code,
+                "item_desc": str(
+                    raw.get("itemDesc") or raw.get("itemDescription") or raw.get("description") or ""
+                ).strip() or code,
+                "qty": qty,
+                "uom": uom,
+                "base_uom": uom,
+                "base_qty": qty,
+            })
+        if not items:
+            raise ValueError("items must contain at least one item with itemCode")
+    else:
+        item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
+        if not item_code:
+            raise ValueError("itemCode is required")
+        qty = str(payload.get("qty") or payload.get("quantity") or 1)
+        uom = str(payload.get("uom") or "").strip() or uom_default
+        items = [{
             "item_code": item_code,
             "item_desc": item_code,
             "qty": qty,
             "uom": uom,
             "base_uom": uom,
             "base_qty": qty,
-        }],
+        }]
+    return {
+        "pr_number": str(payload.get("prNumber") or payload.get("pr_number") or "").strip(),
+        "header": {"vendor_code": str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()},
+        "items": items,
     }
 
 
@@ -1387,29 +1434,54 @@ def _load_json_input(path: str) -> dict:
 
 
 def run_json_po(payload: dict) -> dict:
-    """Run a single PO from the create_po JSON contract. Result JSON = last stdout line."""
+    """Run a single PO from simplified JSON contract.
+    
+    Input format:
+    {
+        "pr_number": "AD/2627/PR/0001",
+        "vendor_code": "VENDOR001"
+    }
+    
+    Output format:
+    {
+        "ok": true,
+        "po_number": "AD/2627/PO/0001",
+        "status": "created"
+    }
+    """
     started = time.time()
-    pr_number = str(payload.get("prNumber") or payload.get("pr_number") or "").strip()
-    vendor = str(payload.get("vendorCode") or payload.get("vendor_code") or "").strip()
-    item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
+    
+    # Simplified input parsing
+    pr_number = str(payload.get("pr_number") or payload.get("prNumber") or "").strip()
+    vendor_code = str(payload.get("vendor_code") or payload.get("vendorCode") or "").strip()
+    
+    # Support legacy format for backward compatibility
+    items_raw = payload.get("items")
+    if isinstance(items_raw, list) and items_raw:
+        item_code = str(items_raw[0].get("itemCode") or items_raw[0].get("item_code") or "").strip()
+        qty = items_raw[0].get("qty") or items_raw[0].get("quantity") or 1
+    else:
+        item_code = str(payload.get("itemCode") or payload.get("item_code") or "").strip()
+        qty = payload.get("qty") or payload.get("quantity") or 1
     request_id = str(payload.get("requestId") or payload.get("request_id") or "").strip()
-    qty = payload.get("qty") or payload.get("quantity") or 1
 
     result = {
         "ok": False,
         "action": "create_po",
-        "poNumber": None,
-        "prNumber": pr_number,
-        "vendorCode": vendor,
+        "po_number": None,
+        "pr_number": pr_number,
+        "vendor_code": vendor_code,
+        "item_code": item_code,
+        "item_count": len(items_raw) if isinstance(items_raw, list) else 1,
         "status": None,
-        "requestId": request_id,
+        "request_id": request_id,
         "durationMs": None,
         "error": None,
     }
 
     def _finish(ok, po_no=None, status=None, error=None):
         result["ok"] = ok
-        result["poNumber"] = po_no
+        result["po_number"] = po_no
         result["status"] = status
         result["error"] = str(error)[:500] if error else None
         if status is None and ok:
@@ -1601,7 +1673,7 @@ def main() -> int:
     parser.add_argument(
         "--json",
         default=None,
-        help="JSON input file (create_po contract: action/prNumber/vendorCode/itemCode/qty/requestId)",
+        help="JSON input file (simplified: pr_number/vendor_code OR legacy: prNumber/vendorCode/itemCode/qty/requestId)",
     )
     parser.add_argument(
         "--pr-from",
