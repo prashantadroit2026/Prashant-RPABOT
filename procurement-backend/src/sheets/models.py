@@ -157,6 +157,44 @@ class AlertAck(BaseModel):
     id: int
 
 
+class BotCreate(BaseModel):
+    model_config = _CAMEL
+
+    code: str
+    name: str
+    description: str = ""
+    type: str = "generic"
+    status: str = "draft"
+    cron_expr: Optional[str] = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class BotUpdate(BaseModel):
+    model_config = _CAMEL
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    status: Optional[str] = None
+    cron_expr: Optional[str] = None
+    config: Optional[dict[str, Any]] = None
+
+
+class NewItemRequest(BaseModel):
+    model_config = _CAMEL
+
+    name: str
+    category: str = "General"
+    uom: str = "Pcs"
+    quantity: int = Field(..., ge=1)
+    description: Optional[str] = None
+    date: str
+    department: str
+    machine: str
+    cell: str = ""
+    hod_signature_confirmed: bool = False
+
+
 class BotRun(BaseModel):
     id: int
     bot_id: int

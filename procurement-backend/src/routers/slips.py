@@ -3,7 +3,14 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from services import sheet_service as svc
-from sheets.models import Slip, SlipCreate, SlipDecide, SlipGroupCreate, SlipReceive
+from sheets.models import (
+    NewItemRequest,
+    Slip,
+    SlipCreate,
+    SlipDecide,
+    SlipGroupCreate,
+    SlipReceive,
+)
 
 router = APIRouter(tags=["slips"])
 
@@ -70,6 +77,24 @@ def list_indents():
 def create_indent(body: SlipGroupCreate):
     try:
         return svc.create_indent(body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/requests")
+def list_requests():
+    try:
+        return svc.list_requests()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/new-item-request")
+def new_item_request(body: NewItemRequest):
+    try:
+        return svc.request_new_item(body)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

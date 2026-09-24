@@ -139,6 +139,13 @@ def find_row_by_id(sheet_name: str, record_id: int) -> tuple[int, dict[str, Any]
     return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4))
+def delete_row(sheet_name: str, row_number: int) -> None:
+    """row_number is 1-based (header is row 1)."""
+    ws = get_spreadsheet().worksheet(sheet_name)
+    ws.delete_rows(row_number)
+
+
 def next_id(sheet_name: str) -> int:
     """Simple auto-increment using the meta sheet."""
     records = get_all_records("meta")

@@ -11,12 +11,15 @@ from sheets.models import (
     AlertAck,
     AlertCreate,
     Bot,
+    BotCreate,
     BotRun,
     BotTrigger,
+    BotUpdate,
     Catalog,
     InventoryRow,
     Item,
     Machine,
+    NewItemRequest,
     Slip,
     SlipCreate,
     SlipDecide,
@@ -529,6 +532,8 @@ def get_inventory_v2() -> list[dict[str, Any]]:
                 "reorderLevel": it.reorder_level,
                 "qty": it.qty,
                 "status": ser.stock_status(it.qty, it.reorder_level),
+                "category": it.category,
+                "unitPrice": it.unit_price,
                 "consumed30": consumed30,
                 "received30": st.get("received", 0),
                 "daysCover": round(it.qty / daily, 1) if daily > 0 else None,
@@ -722,6 +727,324 @@ def list_alerts_api(limit: int = 20) -> list[dict[str, Any]]:
     alerts = [Alert(**_clean(r)) for r in rows]
     alerts.sort(key=lambda x: x.id, reverse=True)
     return [_alert_api(a.model_dump(), items, bots) for a in alerts[:limit]]
+
+
+# ------------------------------------------------------------------
+# Item hint / requests / new-item request
+# ------------------------------------------------------------------
+def item_hint(
+    item_id: int, machine_id: Optional[int] = None
+) -> Optional[dict[str, Any]]:
+    item = get_item(item_id)
+    if not item:
+        return None
+    machines = {m.id: m for m in list_machines()}
+    movs = sc.get_all_records("movements")
+    issues: list[dict[str, Any]] = []
+    last_on_machine: Optional[dict[str, Any]] = None
+    for m in sorted(movs, key=lambda r: str(r.get("created_at") or ""), reverse=True):
+        if str(m.get("kind") or "") != "issue":
+            continue
+        try:
+            if int(m.get("item_id") or 0) != item_id:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if len(issues) < 3:
+            mid = m.get("machine_id")
+            mc = None
+            if mid not in (None, ""):
+                try:
+                    mc = machines.get(int(mid))
+                except (TypeError, ValueError):
+                    mc = None
+            issues.append(
+                {
+                    "qty": abs(int(m.get("qty") or 0)),
+                    "at": m.get("created_at"),
+                    "machineName": mc.name if mc else None,
+                }
+            )
+        if machine_id and last_on_machine is None:
+            try:
+                if int(m.get("machine_id") or 0) == machine_id:
+                    last_on_machine = {
+                        "qty": abs(int(m.get("qty") or 0)),
+                        "at": m.get("created_at"),
+                    }
+            except (TypeError, ValueError):
+                pass
+    return {
+        "item": item_api(item),
+        "lastIssues": issues,
+        "lastOnThisMachine": last_on_machine,
+    }
+
+
+def list_requests() -> list[dict[str, Any]]:
+    items = {i.id: i for i in list_items()}
+    now = datetime.now(timezone.utc)
+    movs = sc.get_all_records("movements")
+    consumed: dict[int, int] = {}
+    last_recv: dict[int, dict[str, Any]] = {}
+    for m in sorted(movs, key=lambda r: str(r.get("created_at") or "")):
+        try:
+            iid = int(m.get("item_id") or 0)
+            qty = abs(int(m.get("qty") or 0))
+        except (TypeError, ValueError):
+            continue
+        if iid <= 0:
+            continue
+        kind = str(m.get("kind") or "")
+        created = ser._parse_dt(m.get("created_at"))
+        if kind == "issue" and created is not None and (now - created).days <= 30:
+            consumed[iid] = consumed.get(iid, 0) + qty
+        elif kind == "receive":
+            last_recv[iid] = {"qty": qty, "at": m.get("created_at")}
+
+    out = []
+    for s in list_slips():
+        it = items.get(s.item_id)
+        if not it:
+            continue
+        unit = it.unit_price
+        last = last_recv.get(s.item_id)
+        out.append(
+            {
+                "id": s.id,
+                "token": s.token,
+                "groupId": s.group_id,
+                "groupToken": s.group_token,
+                "status": s.status,
+                "slipDate": s.slip_date,
+                "department": s.department,
+                "cellStation": s.station,
+                "machineCode": s.machine_code,
+                "machineName": s.machine_name,
+                "hodConfirmed": s.hod_confirmed,
+                "hodTitle": s.hod_title,
+                "decidedAt": s.decided_at,
+                "note": s.note or "",
+                "description": s.description or "",
+                "itemId": s.item_id,
+                "itemCode": s.item_code,
+                "itemName": s.item_name,
+                "category": it.category,
+                "uom": s.uom,
+                "currentStock": s.on_hand or it.qty,
+                "requestedQty": s.qty,
+                "issuedQty": s.issued_qty,
+                "consumptionRate": consumed.get(s.item_id, 0),
+                "unitPrice": unit,
+                "totalCost": round(unit * s.qty, 2),
+                "lastOrderedDate": last["at"] if last else None,
+                "lastOrderedQty": last["qty"] if last else None,
+                "reorderLevel": it.reorder_level,
+            }
+        )
+    return out
+
+
+def request_new_item(payload: NewItemRequest) -> dict[str, Any]:
+    existing = None
+    for it in list_items():
+        if it.name.strip().lower() == payload.name.strip().lower():
+            existing = it
+            break
+    created = existing is None
+    item = existing
+    if created:
+        new_id = sc.next_id("items")
+        code = f"NEW-{new_id:04d}"
+        row = {
+            "id": new_id,
+            "code": code,
+            "name": payload.name,
+            "uom": payload.uom,
+            "reorder_level": 1,
+            "qty": 0,
+            "unit_price": 0,
+            "category": payload.category,
+            "created_at": _now(),
+        }
+        sc.append_row("items", _item_to_row(row))
+        item = Item(**{k: v for k, v in row.items() if k != "created_at"})
+        item.created_at = row["created_at"]
+    grp = create_slip_group(
+        SlipGroupCreate(
+            date=payload.date,
+            department=payload.department,
+            machine=payload.machine,
+            cell=payload.cell,
+            hod_signature_confirmed=payload.hod_signature_confirmed,
+            items=[
+                {
+                    "itemId": item.code,
+                    "quantity": payload.quantity,
+                    "description": payload.description,
+                }
+            ],
+        )
+    )
+    return {
+        "groupToken": grp["groupToken"],
+        "created": created,
+        "slip": slip_api(grp["slips"][0]),
+    }
+
+
+# ------------------------------------------------------------------
+# Bot management / stats / audit
+# ------------------------------------------------------------------
+def bot_api(b: Bot) -> dict[str, Any]:
+    d = ser.camelize(b.model_dump())
+    d["updatedAt"] = d.get("createdAt")
+    if not d.get("cronExpr"):
+        d["cronExpr"] = None
+    return d
+
+
+def get_bot(bot_id: int) -> Optional[Bot]:
+    for b in list_bots():
+        if b.id == bot_id:
+            return b
+    return None
+
+
+def create_bot(payload: BotCreate) -> Bot:
+    bots = list_bots()
+    if any(b.code == payload.code for b in bots):
+        raise ValueError(f"Bot code {payload.code} already exists")
+    new_id = sc.next_id("bots")
+    rec = {
+        "id": new_id,
+        "code": payload.code,
+        "name": payload.name,
+        "description": payload.description,
+        "type": payload.type,
+        "status": payload.status,
+        "cron_expr": payload.cron_expr or "",
+        "config": payload.config,
+        "last_run_at": "",
+        "next_run_at": "",
+        "created_at": _now(),
+    }
+    sc.append_row("bots", _bot_to_row(rec))
+    _audit("system", "bot.create", "bot", str(new_id), payload.model_dump())
+    return Bot(**_clean(rec, json_fields=["config"]))
+
+
+def update_bot(bot_id: int, payload: BotUpdate) -> Bot:
+    found = sc.find_row_by_id("bots", bot_id)
+    if not found:
+        raise ValueError("Bot not found")
+    ridx, rec = found
+    rec["name"] = payload.name if payload.name not in (None, "") else rec.get("name")
+    rec["description"] = (
+        payload.description if payload.description is not None else rec.get("description")
+    )
+    rec["type"] = payload.type if payload.type not in (None, "") else rec.get("type")
+    rec["status"] = payload.status if payload.status not in (None, "") else rec.get("status")
+    if payload.cron_expr is not None:
+        rec["cron_expr"] = payload.cron_expr
+    if payload.config is not None:
+        rec["config"] = payload.config
+    sc.update_row("bots", ridx, _bot_to_row(rec))
+    _audit("system", "bot.update", "bot", str(bot_id), payload.model_dump(exclude_none=True))
+    return Bot(**_clean(rec, json_fields=["config"]))
+
+
+def delete_bot(bot_id: int) -> dict[str, Any]:
+    found = sc.find_row_by_id("bots", bot_id)
+    if not found:
+        raise ValueError("Bot not found")
+    sc.delete_row("bots", found[0])
+    _audit("system", "bot.delete", "bot", str(bot_id), {})
+    return {"ok": True}
+
+
+def bot_stats() -> dict[str, Any]:
+    bots = list_bots()
+    runs_records = sc.get_all_records("bot_runs")
+    alert_records = sc.get_all_records("alerts")
+    now = datetime.now(timezone.utc)
+
+    def rd(rows, name):
+        return sum(1 for r in rows if str(r.get(name) or "") == "true")
+
+    bots_by_status = {s: 0 for s in ("active", "paused", "error")}
+    for b in bots:
+        bots_by_status[b.status] = bots_by_status.get(b.status, 0) + 1
+
+    runs_total = runs_success = runs_failed = runs_running = 0
+    for r in runs_records:
+        runs_total += 1
+        status = str(r.get("status") or "")
+        if status == "success":
+            runs_success += 1
+        elif status == "failed":
+            runs_failed += 1
+        elif status in ("running", "queued"):
+            runs_running += 1
+
+    alerts_total = len(alert_records)
+    alerts_unack = sum(1 for a in alert_records if str(a.get("acknowledged") or "").lower() != "true")
+    alerts_critical = sum(
+        1
+        for a in alert_records
+        if str(a.get("severity") or "").lower() == "critical"
+        and str(a.get("acknowledged") or "").lower() != "true"
+    )
+    return {
+        "bots": {
+            "total": len(bots),
+            "active": bots_by_status.get("active", 0),
+            "paused": bots_by_status.get("paused", 0),
+            "error": bots_by_status.get("error", 0),
+        },
+        "runs": {
+            "total": runs_total,
+            "success": runs_success,
+            "failed": runs_failed,
+            "running": runs_running,
+        },
+        "alerts": {
+            "total": alerts_total,
+            "unack": alerts_unack,
+            "critical": alerts_critical,
+        },
+    }
+
+
+def _audit(
+    actor: str,
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    payload: Optional[dict[str, Any]] = None,
+) -> None:
+    new_id = sc.next_id("audit_logs")
+    sc.append_row(
+        "audit_logs",
+        [new_id, actor, action, entity_type, entity_id, json.dumps(payload or {}), _now()],
+    )
+
+
+def list_audit(limit: int = 20) -> list[dict[str, Any]]:
+    rows = sc.get_all_records("audit_logs")
+    out = []
+    for r in reversed(rows):
+        d = ser.camelize(r)
+        raw = d.get("payload")
+        if isinstance(raw, str):
+            try:
+                d["payload"] = json.loads(raw)
+            except Exception:
+                d["payload"] = {}
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
 
 
 # ------------------------------------------------------------------

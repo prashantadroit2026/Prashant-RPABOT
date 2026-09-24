@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
 
 from services import sheet_service as svc
 
@@ -17,6 +19,22 @@ def catalog():
 def inventory():
     try:
         return svc.get_inventory_v2()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/item-hint")
+def item_hint(
+    itemId: int = Query(...),
+    machineId: Optional[int] = Query(None),
+):
+    try:
+        hint = svc.item_hint(itemId, machineId)
+        if hint is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+        return hint
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -143,14 +143,14 @@ function Overview() {
       <Card>
         <h3 className="text-lg font-semibold">Architecture</h3>
         <p className="mt-2 text-sm text-muted">
-          Postgres (Neon in production, PGLite WASM in preview) → <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">src/lib/db.ts</code> → type-safe <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">createServerFn</code> (plant & bot) + plain REST under <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">server/routes/api/*</code> (Nitro). One migration file is the single source of truth.
+          Google Sheet <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">NEW1</code> → Python backend (FastAPI + <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">sheets-api</code>) → type-safe <code className="font-mono text-xs bg-surface px-1 py-0.5 rounded">createServerFn</code> (plant-server.ts / bot-server.ts via backend-client). The sheet is the single source of truth; the frontend hard-fails with an offline banner when the backend is unreachable.
         </p>
         <div className="mt-4 overflow-x-auto rounded-lg bg-ink p-4 text-paper">
           <pre className="font-mono text-xs leading-5">
 {`[ React + TanStack Start ] ─┐
-                              ├─► createServerFn ──► getSql() ──► Postgres
-[ External / curl / RPA ] ────┘        │
-                                       └─► server/routes/api/* (REST JSON)
+                              ├─► createServerFn ──► backend-client ──► FastAPI ──► Google Sheet
+[ External / curl / RPA ] ────┘        │          (0.0.0.0:8090)        ▲
+                                       └► /api/* (REST JSON proxy)      └─ tabs: items/machines/slips/bots/...
                                             • /api/health
                                             • /api/catalog, /api/inventory, /api/machines, /api/refill
                                             • /api/slips, /api/slips/decide, /api/slips/receive
@@ -512,7 +512,7 @@ function ApiSection() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold">REST & Server Functions — dual surface</h3>
-            <p className="mt-1 text-sm text-muted">Same Postgres via <code className="font-mono text-xs">getSql()</code>. React uses type-safe <code className="font-mono text-xs">createServerFn</code> (plant-server.ts / bot-server.ts). External RPA, curl, or n8n use plain REST under <code className="font-mono text-xs">/api/*</code> (Nitro). Both seed the same DB.</p>
+            <p className="mt-1 text-sm text-muted">Google Sheet via the FastAPI backend on <code className="font-mono text-xs">:8090</code>. React uses type-safe <code className="font-mono text-xs">createServerFn</code> (plant-server.ts / bot-server.ts) through backend-client. External RPA, curl, or n8n use plain REST under <code className="font-mono text-xs">/api/*</code> (proxied to the same backend).</p>
           </div>
           <a href="/api/openapi.json" target="_blank" rel="noreferrer"><Button variant="outline">OpenAPI JSON</Button></a>
         </div>
