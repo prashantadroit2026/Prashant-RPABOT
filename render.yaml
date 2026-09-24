@@ -1,29 +1,43 @@
-# Render Blueprint – Procurement Hub (Google Sheets backend)
-# Deploy: push this repo to GitHub, then in the Render dashboard pick
-# "New → Blueprint" and select the repo. Render reads render.yaml automatically.
+# Render Blueprint — Procurement Hub API (Google Sheets backend)
 #
-# The service account JSON is NOT committed (secrets/ is git-ignored). Set these
-# env vars in the Render dashboard BEFORE the first deploy:
-#   GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT  <- paste the full service-account JSON
-#   GOOGLE_SHEET_ID                      <- the spreadsheet URL id
+# Connect this repo in Render → Blueprints (Infrastructure-as-Code) and Render
+# will create the web service below using the backend's Dockerfile.
+#
+# Required secrets are declared with `sync: false` — set them in the service's
+# Environment tab after the first deploy (or in the Environment Group):
+#   - GOOGLE_SHEET_ID                  spreadsheet id (e.g. 1duAuEMFUInuCJSzhTwRMZjqhGZm_KcZl_gxCndHZ_jE)
+#   - GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT  full JSON key of the service account
+#                                     (the gitignored secrets/*.json file, inlined)
+# The service-account file is git-ignored, so it MUST be provided as content
+# here; the client (src/sheets/client.py) reads GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT
+# before falling back to a local file path.
+
 services:
   - type: web
-    name: procurement-hub-backend
-    rootDir: procurement-backend
+    name: procurement-hub-api
     runtime: docker
     plan: free
+    region: oregon
+    branch: main
+    rootDir: procurement-backend
+    dockerfilePath: procurement-backend/Dockerfile
+    dockerContext: procurement-backend
     healthCheckPath: /api/health
-    dockerfilePath: ./Dockerfile
     envVars:
-      # `sync: false` → Render never manages these; set them in the
-      # service's Environment tab before the first deploy.
-      - key: GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT
-        sync: false
       - key: GOOGLE_SHEET_ID
         sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT
+        sync: false
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
       - key: DEBUG
         value: "false"
       - key: SEED_ON_START
-        value: "false"
-      - key: CORS_ORIGINS
-        value: '["*"]'
+        value: "true"
+      # CORS: only needed if the browser hits this API directly (our frontend
+      # proxies through its server fns, so this can stay commented out until
+      # the deployed frontend URL is known).
+      # - key: CORS_ORIGINS
+      #   value: '["https://your-frontend.onrender.com"]'

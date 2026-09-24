@@ -1,10 +1,14 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Anchor to the backend package root (procurement-backend/), not the process cwd.
+# The server may be started from anywhere (uvicorn --app-dir src, scripts, etc.).
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_BACKEND_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -27,7 +31,10 @@ class Settings(BaseSettings):
 
     @property
     def credentials_path(self) -> Path:
-        return Path(self.google_service_account_json).expanduser().resolve()
+        p = Path(self.google_service_account_json).expanduser()
+        if not p.is_absolute():
+            p = _BACKEND_ROOT / p
+        return p.resolve()
 
 
 settings = Settings()
