@@ -1,15 +1,14 @@
 from fastapi import APIRouter, HTTPException
 
 from services import sheet_service as svc
-from sheets.models import Catalog
 
 router = APIRouter(tags=["catalog"])
 
 
-@router.get("/catalog", response_model=Catalog)
+@router.get("/catalog")
 def catalog():
     try:
-        return svc.get_catalog()
+        return svc.get_catalog_api()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -17,7 +16,7 @@ def catalog():
 @router.get("/inventory")
 def inventory():
     try:
-        return svc.get_inventory()
+        return svc.get_inventory_v2()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -25,6 +24,14 @@ def inventory():
 @router.get("/machines")
 def machines():
     try:
-        return [m.model_dump() for m in svc.list_machines()]
+        return svc.list_machine_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/refill")
+def refill():
+    try:
+        return svc.get_refill_dashboard()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

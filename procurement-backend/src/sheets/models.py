@@ -4,7 +4,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
+
+# Request bodies come from the frontend in camelCase; keep snake_case valid too.
+_CAMEL = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 # ---------- Items / Catalog ----------
@@ -40,6 +44,8 @@ SlipStatus = Literal[
 
 
 class SlipCreate(BaseModel):
+    model_config = _CAMEL
+
     item_id: Optional[int] = None
     item_code: Optional[str] = None          # alternative to item_id
     machine_id: Optional[int] = None
@@ -56,6 +62,8 @@ class SlipCreate(BaseModel):
 
 
 class SlipGroupCreate(BaseModel):
+    model_config = _CAMEL
+
     date: str
     department: str
     machine: str
@@ -101,6 +109,11 @@ class Slip(BaseModel):
     on_hand: Optional[int] = None            # enriched
     reorder_level: Optional[int] = None
 
+    @field_validator("station", "cell", "hod_title", mode="before")
+    @classmethod
+    def _blank_str(cls, v: Any) -> str:
+        return "" if v is None else v
+
 
 # ---------- Inventory ----------
 class InventoryRow(BaseModel):
@@ -132,8 +145,16 @@ class Bot(BaseModel):
 
 
 class BotTrigger(BaseModel):
+    model_config = _CAMEL
+
     id: int
     input: dict[str, Any] = Field(default_factory=dict)
+
+
+class AlertAck(BaseModel):
+    model_config = _CAMEL
+
+    id: int
 
 
 class BotRun(BaseModel):
@@ -163,6 +184,8 @@ class Alert(BaseModel):
 
 
 class AlertCreate(BaseModel):
+    model_config = _CAMEL
+
     severity: Literal["info", "warn", "critical"] = "info"
     title: str
     message: str = ""

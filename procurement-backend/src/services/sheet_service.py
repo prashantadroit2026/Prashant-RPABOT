@@ -8,6 +8,7 @@ from typing import Any, Optional
 from sheets import client as sc
 from sheets.models import (
     Alert,
+    AlertAck,
     AlertCreate,
     Bot,
     BotRun,
@@ -22,6 +23,7 @@ from sheets.models import (
     SlipGroupCreate,
     SlipReceive,
 )
+from services import serializers as ser
 
 
 def _now() -> str:
@@ -132,8 +134,8 @@ def create_slip(payload: SlipCreate) -> Slip:
         "issued_qty": 0,
         "uom": item.uom,
         "department": payload.department,
-        "station": payload.station,
-        "cell": payload.cell,
+        "station": payload.station or payload.cell or "",
+        "cell": payload.cell or "",
         "hod_title": payload.hod_title or f"{payload.department} HOD",
         "hod_confirmed": str(payload.hod_confirmed).lower(),
         "slip_date": slip_date,
@@ -407,59 +409,379 @@ def create_alert(payload: AlertCreate) -> Alert:
 
 
 # ------------------------------------------------------------------
+# API view models — camelCase, exactly the frontend contract
+# ------------------------------------------------------------------
+def item_api(i: Item) -> dict[str, Any]:
+    return ser.camelize(i.model_dump())
+
+
+def machine_api(m: Machine) -> dict[str, Any]:
+    return ser.camelize(m.model_dump())
+
+
+def slip_api(s: Slip) -> dict[str, Any]:
+    return ser.camelize(s.model_dump())
+
+
+def get_catalog_api() -> dict[str, Any]:
+    return {
+        "items": [item_api(i) for i in list_items()],
+        "machines": [machine_api(m) for m in list_machines()],
+    }
+
+
+def _movements() -> list[dict[str, Any]]:
+    return sc.get_all_records("movements")
+
+
+def _movement_stats(
+    movs: list[dict[str, Any]], days: Optional[int] = None
+) -> dict[int, dict[str, Any]]:
+    """Per-item {consumed, received, receipts} in an optional trailing window."""
+    now = datetime.now(timezone.utc)
+    stats: dict[int, dict[str, Any]] = {}
+    for m in movs:
+        try:
+            item_id = int(m.get("item_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0:
+            continue
+        if days is not None:
+            created = ser._parse_dt(m.get("created_at"))
+            if created is None or (now - created).days > days:
+                continue
+        try:
+            qty = int(m.get("qty") or 0)
+        except (TypeError, ValueError):
+            continue
+        kind = str(m.get("kind") or "")
+        s = stats.setdefault(item_id, {"consumed": 0, "received": 0, "receipts": 0})
+        if kind == "issue":
+            s["consumed"] += abs(qty)
+        elif kind == "receive":
+            s["received"] += abs(qty)
+            s["receipts"] += 1
+    return stats
+
+
+def _weekly_by_item(
+    movs: list[dict[str, Any]], weeks: list[str]
+) -> dict[int, list[int]]:
+    out: dict[int, list[int]] = {}
+    for m in movs:
+        if str(m.get("kind") or "") != "issue":
+            continue
+        try:
+            item_id = int(m.get("item_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0:
+            continue
+        week = ser.week_of(m.get("created_at"))
+        if week is None or week not in weeks:
+            continue
+        try:
+            qty = abs(int(m.get("qty") or 0))
+        except (TypeError, ValueError):
+            continue
+        arr = out.setdefault(item_id, [0] * len(weeks))
+        arr[weeks.index(week)] += qty
+    return out
+
+
+def _weekly_series(movs: list[dict[str, Any]], weeks: list[str]) -> list[dict[str, Any]]:
+    consumed = {w: 0 for w in weeks}
+    received = {w: 0 for w in weeks}
+    for m in movs:
+        kind = str(m.get("kind") or "")
+        week = ser.week_of(m.get("created_at"))
+        if week is None or week not in weeks:
+            continue
+        try:
+            qty = abs(int(m.get("qty") or 0))
+        except (TypeError, ValueError):
+            continue
+        if kind == "issue":
+            consumed[week] += qty
+        elif kind == "receive":
+            received[week] += qty
+    return [{"week": w, "consumed": consumed[w], "received": received[w]} for w in weeks]
+
+
+def get_inventory_v2() -> list[dict[str, Any]]:
+    items = list_items()
+    movs = _movements()
+    stats = _movement_stats(movs, days=30)
+    weeks = ser.week_mondays(8)
+    weekly = _weekly_by_item(movs, weeks)
+    rows = []
+    for it in items:
+        st = stats.get(it.id, {})
+        consumed30 = st.get("consumed", 0)
+        daily = consumed30 / 30
+        rows.append(
+            {
+                "id": it.id,
+                "code": it.code,
+                "name": it.name,
+                "uom": it.uom,
+                "reorderLevel": it.reorder_level,
+                "qty": it.qty,
+                "status": ser.stock_status(it.qty, it.reorder_level),
+                "consumed30": consumed30,
+                "received30": st.get("received", 0),
+                "daysCover": round(it.qty / daily, 1) if daily > 0 else None,
+                "weekly": weekly.get(it.id, [0] * len(weeks)),
+            }
+        )
+    rows.sort(key=lambda r: r["name"].lower())
+    return rows
+
+
+def get_refill_dashboard() -> dict[str, Any]:
+    items = list_items()
+    movs = _movements()
+    stats = _movement_stats(movs, days=30)
+    weeks = ser.week_mondays(8)
+    weekly = _weekly_by_item(movs, weeks)
+    rows = []
+    for it in items:
+        st = stats.get(it.id, {})
+        consumed30 = st.get("consumed", 0)
+        daily = consumed30 / 30
+        rows.append(
+            {
+                "itemId": it.id,
+                "name": it.name,
+                "code": it.code,
+                "uom": it.uom,
+                "qty": it.qty,
+                "reorderLevel": it.reorder_level,
+                "consumed30": consumed30,
+                "received30": st.get("received", 0),
+                "receipts": st.get("receipts", 0),
+                "daysCover": round(it.qty / daily, 1) if daily > 0 else None,
+                "weekly": weekly.get(it.id, [0] * len(weeks)),
+                "status": ser.stock_status(it.qty, it.reorder_level),
+            }
+        )
+    rows.sort(key=lambda r: r["name"].lower())
+    return {"rows": rows, "series": _weekly_series(movs, weeks)}
+
+
+def list_machine_stats() -> list[dict[str, Any]]:
+    machines = list_machines()
+    movs = _movements()
+    items = {i.id: i for i in list_items()}
+    now = datetime.now(timezone.utc)
+    totals: dict[int, dict[str, Any]] = {}
+    breakdown: dict[int, dict[int, int]] = {}
+    for m in movs:
+        if str(m.get("kind") or "") != "issue":
+            continue
+        mid = m.get("machine_id")
+        if mid in (None, ""):
+            continue
+        try:
+            machine_id = int(mid)
+            item_id = int(m.get("item_id") or 0)
+            qty = int(m.get("qty") or 0)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0:
+            continue
+        created = ser._parse_dt(m.get("created_at"))
+        t = totals.setdefault(machine_id, {"consumed30": 0, "items": set()})
+        if created is not None and (now - created).days <= 30:
+            t["consumed30"] += abs(qty)
+            t["items"].add(item_id)
+        b = breakdown.setdefault(machine_id, {})
+        b[item_id] = b.get(item_id, 0) + abs(qty)
+
+    out = []
+    for mc in machines:
+        t = totals.get(mc.id, {"consumed30": 0, "items": set()})
+        detail = []
+        for item_id, qty in sorted(breakdown.get(mc.id, {}).items(), key=lambda kv: -kv[1]):
+            it = items.get(item_id)
+            if not it or qty <= 0:
+                continue
+            detail.append({"itemName": it.name, "itemCode": it.code, "qty": qty, "uom": it.uom})
+        out.append(
+            {
+                "id": mc.id,
+                "code": mc.code,
+                "name": mc.name,
+                "line": mc.line or "",
+                "consumed30": t["consumed30"],
+                "distinctItems": len(t["items"]),
+                "topItem": detail[0]["itemName"] if detail else None,
+                "rows": detail,
+            }
+        )
+    out.sort(key=lambda r: r["code"].lower())
+    return out
+
+
+def list_slip_groups() -> list[dict[str, Any]]:
+    slips = list_slips()
+    groups: dict[str, dict[str, Any]] = {}
+    for s in slips:
+        g = s.model_dump()
+        gt = g.get("group_token")
+        if not gt:
+            continue
+        group = groups.get(gt)
+        if group is None:
+            group = {
+                "id": g.get("group_id"),
+                "groupToken": gt,
+                "department": g.get("department"),
+                "machineCode": g.get("machine_code") or g.get("machine_name"),
+                "station": g.get("station") or "",
+                "hodConfirmed": bool(g.get("hod_confirmed")),
+                "slipDate": str(g.get("slip_date") or ""),
+                "createdAt": g.get("created_at"),
+                "slips": [],
+            }
+            groups[gt] = group
+        group["slips"].append(slip_api(s))
+    sorted_groups = sorted(groups.values(), key=lambda g: g["createdAt"] or "", reverse=True)
+    return sorted_groups
+
+
+def create_indent(payload: SlipGroupCreate) -> dict[str, Any]:
+    result = create_slip_group(payload)  # {groupToken, groupId, slips}
+    for g in list_slip_groups():
+        if g["groupToken"] == result["groupToken"]:
+            return g
+    raise ValueError("Indent was created but could not be read back from the sheet")
+
+
+def acknowledge_alert(alert_id: int) -> dict[str, Any]:
+    found = sc.find_row_by_id("alerts", alert_id)
+    if not found:
+        raise ValueError(f"Alert {alert_id} not found")
+    ridx, rec = found
+    rec["acknowledged"] = "true"
+    sc.update_row("alerts", ridx, _alert_to_row(rec))
+    items = {i.id: i for i in list_items()}
+    bots = {b.id: b for b in list_bots()}
+    return _alert_api(rec, items, bots)
+
+
+def _alert_api(a: dict[str, Any], items: dict[int, Item], bots: dict[int, Bot]) -> dict[str, Any]:
+    d = ser.camelize(a)
+    bot = bots.get(d.get("botId"))
+    it = items.get(d.get("itemId"))
+    d["botCode"] = bot.code if bot else None
+    d["itemName"] = it.name if it else None
+    d["itemCode"] = it.code if it else None
+    if d.get("acknowledged") in (None, ""):
+        d["acknowledged"] = False
+    return d
+
+
+def alert_api(a: Alert) -> dict[str, Any]:
+    items = {i.id: i for i in list_items()}
+    bots = {b.id: b for b in list_bots()}
+    return _alert_api(a.model_dump(), items, bots)
+
+
+def list_bots_api() -> list[dict[str, Any]]:
+    out = []
+    for b in list_bots():
+        d = ser.camelize(b.model_dump())
+        d["updatedAt"] = d.get("createdAt")
+        if not d.get("cronExpr"):
+            d["cronExpr"] = None
+        out.append(d)
+    return out
+
+
+def run_api(r: BotRun) -> dict[str, Any]:
+    bots = {b.code: b for b in list_bots()}
+    d = ser.camelize(r.model_dump())
+    b = bots.get(d.get("botCode"))
+    d["botName"] = b.name if b else None
+    if not d.get("finishedAt"):
+        d["finishedAt"] = d.get("startedAt")
+    d.setdefault("createdAt", d.get("startedAt"))
+    return d
+
+
+def list_bot_runs_api(limit: int = 20) -> list[dict[str, Any]]:
+    return [run_api(r) for r in list_bot_runs(limit=limit)]
+
+
+def list_alerts_api(limit: int = 20) -> list[dict[str, Any]]:
+    items = {i.id: i for i in list_items()}
+    bots = {b.id: b for b in list_bots()}
+    rows = sc.get_all_records("alerts")
+    alerts = [Alert(**_clean(r)) for r in rows]
+    alerts.sort(key=lambda x: x.id, reverse=True)
+    return [_alert_api(a.model_dump(), items, bots) for a in alerts[:limit]]
+
+
+# ------------------------------------------------------------------
 # Seed data
 # ------------------------------------------------------------------
 def seed_if_empty() -> None:
-    if sc.get_all_records("items"):
-        return  # already seeded
+    """Seed each table independently (per-table, not all-or-nothing)."""
+    print("Seeding Google Sheet: checking for empty tables…")
 
-    print("Seeding Google Sheet with demo data…")
+    if not sc.get_all_records("items"):
+        print("  → items: seeding demo catalog")
+        demo_items = [
+            (1, "PCPWB60132", "PCPWB60132 Bearing", "NOS", 20, 50, 450.0, "Mechanical"),
+            (2, "HYD-040", "Hydraulic Oil ISO 68", "Ltr", 30, 120, 280.0, "Consumable"),
+            (3, "SEAL-12", "Hydraulic seal kit 12 mm", "Pcs", 10, 8, 95.0, "Mechanical"),
+            (4, "FILTER-A", "Oil filter type A", "Pcs", 15, 25, 320.0, "Consumable"),
+            (5, "BELT-V", "V-belt B-section", "Pcs", 5, 12, 180.0, "Mechanical"),
+        ]
+        for it in demo_items:
+            sc.append_row("items", list(it) + [_now()])
+            sc.next_id("items")  # keep counter in sync
+    else:
+        print("  → items: already seeded")
 
-    # items
-    demo_items = [
-        (1, "PCPWB60132", "PCPWB60132 Bearing", "NOS", 20, 50, 450.0, "Mechanical"),
-        (2, "HYD-040", "Hydraulic Oil ISO 68", "Ltr", 30, 120, 280.0, "Consumable"),
-        (3, "SEAL-12", "Hydraulic seal kit 12 mm", "Pcs", 10, 8, 95.0, "Mechanical"),
-        (4, "FILTER-A", "Oil filter type A", "Pcs", 15, 25, 320.0, "Consumable"),
-        (5, "BELT-V", "V-belt B-section", "Pcs", 5, 12, 180.0, "Mechanical"),
-    ]
-    for it in demo_items:
+    if not sc.get_all_records("machines"):
+        print("  → machines: seeding demo machines")
+        demo_machines = [
+            (1, "CNC-01", "CNC Lathe 01", "Machine shop"),
+            (2, "PRESS-02", "Hydraulic Press 02", "Press bay"),
+            (3, "MILL-03", "Vertical Mill 03", "Machine shop"),
+        ]
+        for m in demo_machines:
+            sc.append_row("machines", list(m) + [_now()])
+            sc.next_id("machines")
+    else:
+        print("  → machines: already seeded")
+
+    if not sc.get_all_records("bots"):
+        print("  → bots: seeding demo bot")
         sc.append_row(
-            "items",
-            list(it) + [_now()],
+            "bots",
+            [
+                1,
+                "BOT-TCS-PRPO",
+                "TCS PR → PO Bot",
+                "Creates Purchase Requisition and converts to PO in TCS",
+                "generic",
+                "active",
+                "0 8 * * *",
+                json.dumps({"script": "create_pr_po.py"}),
+                "",
+                "",
+                _now(),
+            ],
         )
-        sc.next_id("items")  # keep counter in sync
+        sc.next_id("bots")
+    else:
+        print("  → bots: already seeded")
 
-    # machines
-    demo_machines = [
-        (1, "CNC-01", "CNC Lathe 01", "Machine shop"),
-        (2, "PRESS-02", "Hydraulic Press 02", "Press bay"),
-        (3, "MILL-03", "Vertical Mill 03", "Machine shop"),
-    ]
-    for m in demo_machines:
-        sc.append_row("machines", list(m) + [_now()])
-        sc.next_id("machines")
-
-    # bots
-    sc.append_row(
-        "bots",
-        [
-            1,
-            "BOT-TCS-PRPO",
-            "TCS PR → PO Bot",
-            "Creates Purchase Requisition and converts to PO in TCS",
-            "generic",
-            "active",
-            "0 8 * * *",
-            json.dumps({"script": "create_pr_po.py"}),
-            "",
-            "",
-            _now(),
-        ],
-    )
-    sc.next_id("bots")
-
-    print("Seed complete.")
+    print("Seed check complete.")
 
 
 # ------------------------------------------------------------------

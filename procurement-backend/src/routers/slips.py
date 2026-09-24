@@ -11,7 +11,7 @@ router = APIRouter(tags=["slips"])
 @router.get("/slips")
 def list_slips(status: Optional[str] = Query(None)):
     try:
-        return [s.model_dump() for s in svc.list_slips(status=status)]
+        return [svc.slip_api(s) for s in svc.list_slips(status=status)]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -36,20 +36,40 @@ def create_slip_group(body: SlipGroupCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/slips/decide", response_model=Slip)
+@router.post("/slips/decide")
 def decide(body: SlipDecide):
     try:
-        return svc.decide_slip(body)
+        return svc.slip_api(svc.decide_slip(body))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/slips/receive", response_model=Slip)
+@router.post("/slips/receive")
 def receive(body: SlipReceive):
     try:
-        return svc.receive_slip(body)
+        return svc.slip_api(svc.receive_slip(body))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- Indents (multi-item slip groups) ----
+
+@router.get("/indents")
+def list_indents():
+    try:
+        return svc.list_slip_groups()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/indents")
+def create_indent(body: SlipGroupCreate):
+    try:
+        return svc.create_indent(body)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
