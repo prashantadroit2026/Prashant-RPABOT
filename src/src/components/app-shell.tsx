@@ -8,6 +8,7 @@ import {
   Factory,
   LogOut,
   Package,
+  Users,
   Warehouse,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/machines", label: "Machines", icon: Factory, roles: ["shopfloor", "store", "management"] as Role[] },
   { to: "/management", label: "Refill", icon: BarChart3, roles: ["management", "store"] as Role[] },
   { to: "/bots", label: "Bots", icon: Bot, roles: ["shopfloor", "store", "management"] as Role[] },
+  { to: "/users", label: "Users", icon: Users, roles: ["management"] as Role[] },
   { to: "/system", label: "System", icon: Database, roles: ["shopfloor", "store", "management"] as Role[] },
 ];
 

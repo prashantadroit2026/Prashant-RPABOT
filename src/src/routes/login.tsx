@@ -2,10 +2,12 @@ import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Eye, EyeOff, KeyRound, Package, User } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { BackendError } from "@/lib/backend-client";
 import { HOME_BY_ROLE } from "@/components/role-guard";
 import { ROLE_LABEL } from "@/lib/plant";
 import { useRole } from "@/lib/role-store";
-import { USERS, findUser } from "@/lib/users";
+import { USERS } from "@/lib/users";
+import { authenticateUser } from "@/lib/users-api";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -27,7 +29,7 @@ function LoginPage() {
 
   if (user) return <Navigate to={HOME_BY_ROLE[user.role]} />;
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const id = userId.trim();
     if (!id) {
@@ -38,17 +40,23 @@ function LoginPage() {
       toast.error("Password is required.");
       return;
     }
-    const account = findUser(id, password);
-    if (!account) {
-      toast.error("Invalid User ID or password.");
-      return;
-    }
     setBusy(true);
-    window.setTimeout(() => {
+    try {
+      const account = await authenticateUser({ data: { userId: id, password } });
       signIn({ userId: account.userId, name: account.name, role: account.role, department: account.department });
       toast.success(`Welcome, ${account.name} — signed in as ${ROLE_LABEL[account.role]}`);
       void navigate({ to: HOME_BY_ROLE[account.role] });
-    }, 500);
+    } catch (err) {
+      if (err instanceof BackendError) {
+        if (err.status === 401) toast.error("Invalid User ID or password.");
+        else if (err.status === 0) toast.error("Backend is offline — sign-in is unavailable.");
+        else toast.error(err.message);
+      } else {
+        toast.error((err as Error)?.message ?? "Sign-in failed");
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

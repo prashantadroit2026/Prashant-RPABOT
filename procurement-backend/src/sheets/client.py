@@ -24,6 +24,7 @@ WORKSHEETS = [
     "machines",
     "slips",
     "movements",
+    "users",
     "bots",
     "bot_runs",
     "alerts",
@@ -79,6 +80,9 @@ def ensure_worksheets() -> None:
         ],
         "movements": [
             "id", "item_id", "machine_id", "slip_id", "qty", "kind", "created_at",
+        ],
+        "users": [
+            "id", "user_id", "name", "role", "department", "password", "created_at",
         ],
         "bots": [
             "id", "code", "name", "description", "type", "status",

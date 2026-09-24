@@ -229,3 +229,43 @@ class AlertCreate(BaseModel):
     message: str = ""
     bot_id: Optional[int] = None
     item_id: Optional[int] = None
+
+
+# ---------- Users ----------
+RoleType = Literal["shopfloor", "store", "management"]
+
+
+class AppUser(BaseModel):
+    id: int
+    user_id: str
+    name: str
+    role: RoleType = "shopfloor"
+    department: str = ""
+    password: str = ""            # stored hashed (sha256(user_id:password)); never serialized
+    created_at: Optional[str] = None
+
+
+class UserCreate(BaseModel):
+    model_config = _CAMEL
+
+    user_id: str
+    name: str
+    role: RoleType = "shopfloor"
+    department: str = ""
+    password: str = Field(..., min_length=6)
+
+
+class UserUpdate(BaseModel):
+    model_config = _CAMEL
+
+    name: Optional[str] = None
+    role: Optional[RoleType] = None
+    department: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6)
+
+
+class UserLogin(BaseModel):
+    model_config = _CAMEL
+
+    user_id: str
+    password: str

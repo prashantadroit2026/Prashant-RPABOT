@@ -1,7 +1,9 @@
-"""Business logic on top of Google Sheets."""
+﻿"""Business logic on top of Google Sheets."""
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -10,6 +12,7 @@ from sheets.models import (
     Alert,
     AlertAck,
     AlertCreate,
+    AppUser,
     Bot,
     BotCreate,
     BotRun,
@@ -25,6 +28,9 @@ from sheets.models import (
     SlipDecide,
     SlipGroupCreate,
     SlipReceive,
+    UserCreate,
+    UserLogin,
+    UserUpdate,
 )
 from services import serializers as ser
 
@@ -321,7 +327,7 @@ def get_inventory() -> list[InventoryRow]:
                 status=status,  # type: ignore
                 consumed30=consumed30,
                 days_cover=days_cover,
-                weekly=[0] * 8,  # placeholder – can be enhanced
+                weekly=[0] * 8,  # placeholder â€“ can be enhanced
             )
         )
     return result
@@ -412,7 +418,7 @@ def create_alert(payload: AlertCreate) -> Alert:
 
 
 # ------------------------------------------------------------------
-# API view models — camelCase, exactly the frontend contract
+# API view models â€” camelCase, exactly the frontend contract
 # ------------------------------------------------------------------
 def item_api(i: Item) -> dict[str, Any]:
     return ser.camelize(i.model_dump())
@@ -1048,14 +1054,121 @@ def list_audit(limit: int = 20) -> list[dict[str, Any]]:
 
 
 # ------------------------------------------------------------------
+# Users (sheet-backed login & user management)
+# ------------------------------------------------------------------
+_USER_ID_RE = re.compile(r"^[a-z0-9._-]+$")
+
+
+def _password_digest(user_id: str, password: str) -> str:
+    return hashlib.sha256(f"{user_id.strip().lower()}:{password}".encode("utf-8")).hexdigest()
+
+
+def list_users() -> list[AppUser]:
+    rows = sc.get_all_records("users")
+    return [AppUser(**_clean(r)) for r in rows]
+
+
+def get_user(user_id: int) -> Optional[AppUser]:
+    for u in list_users():
+        if u.id == user_id:
+            return u
+    return None
+
+
+def find_user(user_id: str, password: str) -> Optional[AppUser]:
+    """Return the matching user or None. Compares against the stored digest."""
+    uid = user_id.strip().lower()
+    digest = _password_digest(uid, password)
+    for u in list_users():
+        if u.user_id.lower() == uid and u.password == digest:
+            return u
+    return None
+
+
+def _user_api(user: AppUser) -> dict[str, Any]:
+    """Serialize a user for the API â€” the password must never leave the server."""
+    d = ser.camelize(user.model_dump())
+    d.pop("password", None)
+    return d
+
+
+def list_users_api() -> list[dict[str, Any]]:
+    return [_user_api(u) for u in list_users()]
+
+
+def create_user(payload: UserCreate) -> AppUser:
+    uid = payload.user_id.strip().lower()
+    if not _USER_ID_RE.match(uid):
+        raise ValueError(
+            "User ID must be lowercase letters, digits and . _ - only"
+        )
+    if any(u.user_id.lower() == uid for u in list_users()):
+        raise ValueError(f"User ID {uid} already exists")
+    new_id = sc.next_id("users")
+    rec = {
+        "id": new_id,
+        "user_id": uid,
+        "name": payload.name.strip(),
+        "role": payload.role,
+        "department": payload.department.strip(),
+        "password": _password_digest(uid, payload.password),
+        "created_at": _now(),
+    }
+    sc.append_row("users", _user_to_row(rec))
+    _audit("system", "user.create", "user", str(new_id), {"userId": uid, "role": payload.role})
+    return AppUser(**_clean(rec))
+
+
+def update_user(user_id: int, payload: UserUpdate) -> AppUser:
+    found = sc.find_row_by_id("users", user_id)
+    if not found:
+        raise ValueError("User not found")
+    ridx, rec = found
+    if payload.name not in (None, ""):
+        rec["name"] = payload.name.strip()
+    if payload.role is not None:
+        rec["role"] = payload.role
+    if payload.department is not None:
+        rec["department"] = payload.department.strip()
+    if payload.password not in (None, ""):
+        rec["password"] = _password_digest(
+            str(rec.get("user_id") or ""), payload.password
+        )
+    sc.update_row("users", ridx, _user_to_row(rec))
+    _audit("system", "user.update", "user", str(user_id), payload.model_dump(exclude_none=True))
+    return AppUser(**_clean(rec))
+
+
+def delete_user(user_id: int) -> dict[str, Any]:
+    found = sc.find_row_by_id("users", user_id)
+    if not found:
+        raise ValueError("User not found")
+    sc.delete_row("users", found[0])
+    _audit("system", "user.delete", "user", str(user_id), {})
+    return {"ok": True}
+
+
+def _user_to_row(rec: dict) -> list:
+    return [
+        rec.get("id"),
+        rec.get("user_id"),
+        rec.get("name"),
+        rec.get("role"),
+        rec.get("department"),
+        rec.get("password"),
+        rec.get("created_at"),
+    ]
+
+
+# ------------------------------------------------------------------
 # Seed data
 # ------------------------------------------------------------------
 def seed_if_empty() -> None:
     """Seed each table independently (per-table, not all-or-nothing)."""
-    print("Seeding Google Sheet: checking for empty tables…")
+    print("Seeding Google Sheet: checking for empty tablesâ€¦")
 
     if not sc.get_all_records("items"):
-        print("  → items: seeding demo catalog")
+        print("  â†’ items: seeding demo catalog")
         demo_items = [
             (1, "PCPWB60132", "PCPWB60132 Bearing", "NOS", 20, 50, 450.0, "Mechanical"),
             (2, "HYD-040", "Hydraulic Oil ISO 68", "Ltr", 30, 120, 280.0, "Consumable"),
@@ -1067,10 +1180,10 @@ def seed_if_empty() -> None:
             sc.append_row("items", list(it) + [_now()])
             sc.next_id("items")  # keep counter in sync
     else:
-        print("  → items: already seeded")
+        print("  â†’ items: already seeded")
 
     if not sc.get_all_records("machines"):
-        print("  → machines: seeding demo machines")
+        print("  â†’ machines: seeding demo machines")
         demo_machines = [
             (1, "CNC-01", "CNC Lathe 01", "Machine shop"),
             (2, "PRESS-02", "Hydraulic Press 02", "Press bay"),
@@ -1080,16 +1193,16 @@ def seed_if_empty() -> None:
             sc.append_row("machines", list(m) + [_now()])
             sc.next_id("machines")
     else:
-        print("  → machines: already seeded")
+        print("  â†’ machines: already seeded")
 
     if not sc.get_all_records("bots"):
-        print("  → bots: seeding demo bot")
+        print("  â†’ bots: seeding demo bot")
         sc.append_row(
             "bots",
             [
                 1,
                 "BOT-TCS-PRPO",
-                "TCS PR → PO Bot",
+                "TCS PR â†’ PO Bot",
                 "Creates Purchase Requisition and converts to PO in TCS",
                 "generic",
                 "active",
@@ -1102,7 +1215,29 @@ def seed_if_empty() -> None:
         )
         sc.next_id("bots")
     else:
-        print("  → bots: already seeded")
+        print("  â†’ bots: already seeded")
+
+    if not sc.get_all_records("users"):
+        print("  â†’ users: seeding demo users")
+        demo_users = [
+            (1, "sf.sharma", "A. Sharma", "shopfloor", "Production", "shop@123"),
+            (2, "st.khan", "R. Khan", "store", "Warehouse", "store@123"),
+            (3, "mg.rao", "V. Rao", "management", "Tool Room", "mgmt@123"),
+        ]
+        for uid, user_id, name, role, department, pw in demo_users:
+            rec = {
+                "id": uid,
+                "user_id": user_id,
+                "name": name,
+                "role": role,
+                "department": department,
+                "password": _password_digest(user_id, pw),
+                "created_at": _now(),
+            }
+            sc.append_row("users", _user_to_row(rec))
+            sc.next_id("users")
+    else:
+        print("  â†’ users: already seeded")
 
     print("Seed check complete.")
 

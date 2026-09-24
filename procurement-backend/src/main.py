@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import bots, catalog, health, slips
+from routers import bots, catalog, health, slips, users
 from sheets.client import ensure_worksheets
 from services.sheet_service import seed_if_empty
 
@@ -65,6 +65,7 @@ def create_app(run_startup: bool = True) -> FastAPI:
     app.include_router(catalog.router, prefix="/api")
     app.include_router(slips.router, prefix="/api")
     app.include_router(bots.router, prefix="/api")
+    app.include_router(users.router, prefix="/api")
 
     @app.get("/")
     def root():
