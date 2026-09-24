@@ -5,9 +5,10 @@ let cachedBase: string | undefined;
 
 export function backendBaseUrl(): string {
   if (cachedBase) return cachedBase;
-  cachedBase =
+  cachedBase = (
     process.env.BACKEND_URL?.trim() ||
-    (process.env.VERCEL ? DEPLOYED_BACKEND_URL : DEFAULT_BACKEND_URL);
+    (process.env.VERCEL ? DEPLOYED_BACKEND_URL : DEFAULT_BACKEND_URL)
+  ).replace(/\/+$/, "");
   return cachedBase;
 }
 
