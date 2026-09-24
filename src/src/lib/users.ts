@@ -17,7 +17,7 @@ export const USERS: AppUser[] = [
     name: "A. Sharma",
     role: "shopfloor",
     department: "Production",
-    password: "shop@123",
+    password: "PR2026",
   },
   {
     id: 2,
@@ -25,7 +25,7 @@ export const USERS: AppUser[] = [
     name: "R. Khan",
     role: "store",
     department: "Warehouse",
-    password: "store@123",
+    password: "PR2026",
   },
   {
     id: 3,
@@ -33,7 +33,7 @@ export const USERS: AppUser[] = [
     name: "V. Rao",
     role: "management",
     department: "Tool Room",
-    password: "mgmt@123",
+    password: "PR2026",
   },
 ];
 
