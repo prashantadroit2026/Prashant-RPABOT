@@ -50,8 +50,8 @@ def _today() -> str:
 # ------------------------------------------------------------------
 # Item master reference lives in the "Item data" tab (Item Code +
 # Item Description). The lightweight "items" tab holds operational rows
-# (stock qty / reorder) for the demo set and NEW-* requests; rows there
-# whose code matches the master inherit master descriptions.
+# (stock qty / reorder) for the demo set and NEW-* requests. Its name is
+# the display name when present; master fields fill missing values.
 _ITEM_DATA_TAB = "Item data"
 _ITEM_DATA_TTL_S = 60.0
 _item_data_cache: dict[str, Any] = {"at": 0.0, "rows": []}
@@ -127,7 +127,7 @@ def _item_from_row(stock: dict, master: dict | None = None) -> Optional[Item]:
 
     Returns None instead of raising when the row lacks a usable id/code, so a
     single partially-filled row in the spreadsheet can't 500 the whole catalog.
-    Master ('Item data') fields take precedence over the operational row.
+    Operational ('items') fields take precedence for the display name; master fields fill missing values.
     """
     code = str(stock.get("code") or "").strip()
     if not code:
@@ -142,7 +142,7 @@ def _item_from_row(stock: dict, master: dict | None = None) -> Optional[Item]:
     return Item(
         id=item_id,
         code=code,
-        name=str(_first(m.get("Item Description"), m.get("Item Name"), stock.get("name"), fallback=code)).strip() or code,
+        name=str(_first(stock.get("name"), m.get("Item Description"), m.get("Item Name"), fallback=code)).strip() or code,
         uom=str(_first(m.get("Base UOM"), stock.get("uom"), fallback="Pcs")),
         reorder_level=_to_int(_first(m.get("Reorder Level"), stock.get("reorder_level"))),
         qty=_to_int(_first(m.get("Qty"), m.get("Quantity"), stock.get("qty"))),
