@@ -1,0 +1,18 @@
+{
+  "name": "Procurement Hub",
+  "short_name": "Procurement Hub",
+  "description": "Digital shopfloor slips, live stock versus PR, machine spare consumption, and refill rates.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f0e8",
+  "theme_color": "#f3f0e8",
+  "icons": [
+    {
+      "src": "/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
