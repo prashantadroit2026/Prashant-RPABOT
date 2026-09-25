@@ -18,6 +18,7 @@ import { Route as ManagementRouteImport } from './routes/management'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as StoreRouteImport } from './routes/store'
 import { Route as SystemRouteImport } from './routes/system'
+import { Route as UsersRouteImport } from './routes/users'
 import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiIndentsRouteImport } from './routes/api/indents'
@@ -33,6 +34,9 @@ import { Route as ApiBotsTriggerRouteImport } from './routes/api/bots/trigger'
 import { Route as ApiSlipsIndexRouteImport } from './routes/api/slips/index'
 import { Route as ApiSlipsDecideRouteImport } from './routes/api/slips/decide'
 import { Route as ApiSlipsReceiveRouteImport } from './routes/api/slips/receive'
+import { Route as ApiUsersIndexRouteImport } from './routes/api/users/index'
+import { Route as ApiUsersUserIdRouteImport } from './routes/api/users/$userId'
+import { Route as ApiUsersLoginRouteImport } from './routes/api/users/login'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -77,6 +81,11 @@ const StoreRoute = StoreRouteImport.update({
 const SystemRoute = SystemRouteImport.update({
   id: '/system',
   path: '/system',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsersRoute = UsersRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCatalogRoute = ApiCatalogRouteImport.update({
@@ -154,6 +163,21 @@ const ApiSlipsReceiveRoute = ApiSlipsReceiveRouteImport.update({
   path: '/api/slips/receive',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUsersIndexRoute = ApiUsersIndexRouteImport.update({
+  id: '/api/users/',
+  path: '/api/users/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUsersUserIdRoute = ApiUsersUserIdRouteImport.update({
+  id: '/api/users/$userId',
+  path: '/api/users/$userId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUsersLoginRoute = ApiUsersLoginRouteImport.update({
+  id: '/api/users/login',
+  path: '/api/users/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -165,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/users': typeof UsersRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
   '/api/indents': typeof ApiIndentsRoute
@@ -177,9 +202,12 @@ export interface FileRoutesByFullPath {
   '/api/bots/trigger': typeof ApiBotsTriggerRoute
   '/api/slips/decide': typeof ApiSlipsDecideRoute
   '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/users/$userId': typeof ApiUsersUserIdRoute
+  '/api/users/login': typeof ApiUsersLoginRoute
   '/api/alerts/': typeof ApiAlertsIndexRoute
   '/api/bots/': typeof ApiBotsIndexRoute
   '/api/slips/': typeof ApiSlipsIndexRoute
+  '/api/users/': typeof ApiUsersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -191,6 +219,7 @@ export interface FileRoutesByTo {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/users': typeof UsersRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
   '/api/indents': typeof ApiIndentsRoute
@@ -203,9 +232,12 @@ export interface FileRoutesByTo {
   '/api/bots/trigger': typeof ApiBotsTriggerRoute
   '/api/slips/decide': typeof ApiSlipsDecideRoute
   '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/users/$userId': typeof ApiUsersUserIdRoute
+  '/api/users/login': typeof ApiUsersLoginRoute
   '/api/alerts': typeof ApiAlertsIndexRoute
   '/api/bots': typeof ApiBotsIndexRoute
   '/api/slips': typeof ApiSlipsIndexRoute
+  '/api/users': typeof ApiUsersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -218,6 +250,7 @@ export interface FileRoutesById {
   '/requests': typeof RequestsRoute
   '/store': typeof StoreRoute
   '/system': typeof SystemRoute
+  '/users': typeof UsersRoute
   '/api/catalog': typeof ApiCatalogRoute
   '/api/health': typeof ApiHealthRoute
   '/api/indents': typeof ApiIndentsRoute
@@ -230,9 +263,12 @@ export interface FileRoutesById {
   '/api/bots/trigger': typeof ApiBotsTriggerRoute
   '/api/slips/decide': typeof ApiSlipsDecideRoute
   '/api/slips/receive': typeof ApiSlipsReceiveRoute
+  '/api/users/$userId': typeof ApiUsersUserIdRoute
+  '/api/users/login': typeof ApiUsersLoginRoute
   '/api/alerts/': typeof ApiAlertsIndexRoute
   '/api/bots/': typeof ApiBotsIndexRoute
   '/api/slips/': typeof ApiSlipsIndexRoute
+  '/api/users/': typeof ApiUsersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -246,6 +282,7 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/users'
     | '/api/catalog'
     | '/api/health'
     | '/api/indents'
@@ -258,9 +295,12 @@ export interface FileRouteTypes {
     | '/api/bots/trigger'
     | '/api/slips/decide'
     | '/api/slips/receive'
+    | '/api/users/$userId'
+    | '/api/users/login'
     | '/api/alerts/'
     | '/api/bots/'
     | '/api/slips/'
+    | '/api/users/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -272,6 +312,7 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/users'
     | '/api/catalog'
     | '/api/health'
     | '/api/indents'
@@ -284,9 +325,12 @@ export interface FileRouteTypes {
     | '/api/bots/trigger'
     | '/api/slips/decide'
     | '/api/slips/receive'
+    | '/api/users/$userId'
+    | '/api/users/login'
     | '/api/alerts'
     | '/api/bots'
     | '/api/slips'
+    | '/api/users'
   id:
     | '__root__'
     | '/'
@@ -298,6 +342,7 @@ export interface FileRouteTypes {
     | '/requests'
     | '/store'
     | '/system'
+    | '/users'
     | '/api/catalog'
     | '/api/health'
     | '/api/indents'
@@ -310,9 +355,12 @@ export interface FileRouteTypes {
     | '/api/bots/trigger'
     | '/api/slips/decide'
     | '/api/slips/receive'
+    | '/api/users/$userId'
+    | '/api/users/login'
     | '/api/alerts/'
     | '/api/bots/'
     | '/api/slips/'
+    | '/api/users/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -325,6 +373,7 @@ export interface RootRouteChildren {
   RequestsRoute: typeof RequestsRoute
   StoreRoute: typeof StoreRoute
   SystemRoute: typeof SystemRoute
+  UsersRoute: typeof UsersRoute
   ApiCatalogRoute: typeof ApiCatalogRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiIndentsRoute: typeof ApiIndentsRoute
@@ -337,9 +386,12 @@ export interface RootRouteChildren {
   ApiBotsTriggerRoute: typeof ApiBotsTriggerRoute
   ApiSlipsDecideRoute: typeof ApiSlipsDecideRoute
   ApiSlipsReceiveRoute: typeof ApiSlipsReceiveRoute
+  ApiUsersUserIdRoute: typeof ApiUsersUserIdRoute
+  ApiUsersLoginRoute: typeof ApiUsersLoginRoute
   ApiAlertsIndexRoute: typeof ApiAlertsIndexRoute
   ApiBotsIndexRoute: typeof ApiBotsIndexRoute
   ApiSlipsIndexRoute: typeof ApiSlipsIndexRoute
+  ApiUsersIndexRoute: typeof ApiUsersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -405,6 +457,13 @@ declare module '@tanstack/react-router' {
       path: '/system'
       fullPath: '/system'
       preLoaderRoute: typeof SystemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/users': {
+      id: '/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof UsersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/catalog': {
@@ -512,6 +571,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSlipsReceiveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/users/': {
+      id: '/api/users/'
+      path: '/api/users'
+      fullPath: '/api/users/'
+      preLoaderRoute: typeof ApiUsersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/users/$userId': {
+      id: '/api/users/$userId'
+      path: '/api/users/$userId'
+      fullPath: '/api/users/$userId'
+      preLoaderRoute: typeof ApiUsersUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/users/login': {
+      id: '/api/users/login'
+      path: '/api/users/login'
+      fullPath: '/api/users/login'
+      preLoaderRoute: typeof ApiUsersLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -525,6 +605,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequestsRoute: RequestsRoute,
   StoreRoute: StoreRoute,
   SystemRoute: SystemRoute,
+  UsersRoute: UsersRoute,
   ApiCatalogRoute: ApiCatalogRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiIndentsRoute: ApiIndentsRoute,
@@ -537,9 +618,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBotsTriggerRoute: ApiBotsTriggerRoute,
   ApiSlipsDecideRoute: ApiSlipsDecideRoute,
   ApiSlipsReceiveRoute: ApiSlipsReceiveRoute,
+  ApiUsersUserIdRoute: ApiUsersUserIdRoute,
+  ApiUsersLoginRoute: ApiUsersLoginRoute,
   ApiAlertsIndexRoute: ApiAlertsIndexRoute,
   ApiBotsIndexRoute: ApiBotsIndexRoute,
   ApiSlipsIndexRoute: ApiSlipsIndexRoute,
+  ApiUsersIndexRoute: ApiUsersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
