@@ -132,6 +132,11 @@ function UsersPage() {
                 placeholder="e.g. n.das"
                 autoComplete="off"
               />
+              {form.userId.length > 0 && !/^[a-z0-9._-]+$/.test(form.userId) && (
+                <p className="mt-1 text-xs text-stop">
+                  Only lowercase letters, digits, <code className="font-mono">.</code>, <code className="font-mono">_</code>, <code className="font-mono">-</code> — no spaces.
+                </p>
+              )}
             </label>
             <label className="block">
               <Label>Full name *</Label>

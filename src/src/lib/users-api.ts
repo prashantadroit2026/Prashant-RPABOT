@@ -17,14 +17,26 @@ const passwordSchema = z
   .min(6, "Password must be at least 6 characters")
   .max(100);
 
+// Normalize the same way the backend does (trim + lowercase) BEFORE validating,
+// so "Rahul.Kumar" or "  Rahul " produce a clean "rahul.kumar" instead of a
+// confusing format error. Only truly invalid characters (space, @, ...) remain
+// blocked, with a clear message.
+const userIdSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.toLowerCase())
+  .pipe(
+    z
+      .string()
+      .min(3, "User ID must be at least 3 characters")
+      .max(40)
+      .regex(/^[a-z0-9._-]+$/, "User ID: lowercase letters, digits, . _ - only — no spaces"),
+  );
+
 export const createUser = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      userId: z
-        .string()
-        .min(3, "User ID must be at least 3 characters")
-        .max(40)
-        .regex(/^[a-z0-9._-]+$/, "Use lowercase letters, digits, . _ - only"),
+      userId: userIdSchema,
       name: nameSchema,
       role: roleSchema,
       department: deptSchema,
