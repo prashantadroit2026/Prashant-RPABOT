@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
+import zlib
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -46,9 +48,116 @@ def _today() -> str:
 # ------------------------------------------------------------------
 # Catalog
 # ------------------------------------------------------------------
+# Item master reference lives in the "Item data" tab (Item Code +
+# Item Description). The lightweight "items" tab holds operational rows
+# (stock qty / reorder) for the demo set and NEW-* requests; rows there
+# whose code matches the master inherit master descriptions.
+_ITEM_DATA_TAB = "Item data"
+_ITEM_DATA_TTL_S = 60.0
+_item_data_cache: dict[str, Any] = {"at": 0.0, "rows": []}
+
+
+def _stable_item_id(code: str) -> int:
+    """Deterministic id for master items that have no row in the items tab."""
+    return (zlib.crc32(code.encode("utf-8")) & 0x7FFFFFFF) or 1
+
+
+def _to_num(v: Any) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _load_item_data() -> list[dict[str, Any]]:
+    """Master rows from the 'Item data' tab, deduped by Item Code.
+
+    Returns [] when the tab is absent or unreadable, so the catalog falls back
+    to the operational 'items' tab instead of failing. The worksheet check plus
+    the TTL keep a missing master tab from retrying the Sheets API on every
+    request (which would exhaust the 300 reads/min quota and 500 every page).
+    """
+    now = time.monotonic()
+    cached = _item_data_cache
+    if now - cached["at"] < _ITEM_DATA_TTL_S:
+        return cached["rows"]
+    rows: list[dict[str, Any]] = []
+    try:
+        if sc.has_worksheet(_ITEM_DATA_TAB):
+            rows = sc.get_all_records(_ITEM_DATA_TAB)
+        else:
+            print(
+                f"[warn] '{_ITEM_DATA_TAB}' worksheet not found in the spreadsheet - "
+                "serving catalog from the 'items' tab only. Run "
+                "python import_item_data.py to populate the master tab."
+            )
+    except Exception:  # noqa: BLE001 - one optional tab must never take the API down
+        rows = []
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        code = str(r.get("Item Code") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        out.append(r)
+    cached["at"] = now
+    cached["rows"] = out
+    return out
+
+
 def list_items() -> list[Item]:
-    rows = sc.get_all_records("items")
-    return [Item(**_clean(r)) for r in rows]
+    """Merge master 'Item data' with operational 'items' rows by code."""
+    stock = sc.get_all_records("items")
+    stock_by_code: dict[str, dict[str, Any]] = {}
+    for r in stock:
+        code = str(r.get("code") or "").strip()
+        if code and code not in stock_by_code:
+            stock_by_code[code] = r
+
+    items: list[Item] = []
+    covered: set[str] = set()
+    for r in _load_item_data():
+        code = str(r.get("Item Code") or "").strip()
+        desc = str(r.get("Item Description") or "").strip() or code
+        s = stock_by_code.get(code)
+        if s:
+            items.append(
+                Item(
+                    id=int(s["id"]),
+                    code=code,
+                    name=desc,
+                    uom=str(r.get("Base UOM") or s.get("uom") or "Pcs"),
+                    reorder_level=int(s.get("reorder_level") or 0),
+                    qty=int(s.get("qty") or 0),
+                    unit_price=_to_num(r.get("Rate")) or _to_num(s.get("unit_price")),
+                    category=str(r.get("Item Category") or s.get("category") or "General"),
+                    created_at=s.get("created_at"),
+                )
+            )
+        else:
+            items.append(
+                Item(
+                    id=_stable_item_id(code),
+                    code=code,
+                    name=desc,
+                    uom=str(r.get("Base UOM") or "Pcs"),
+                    reorder_level=0,
+                    qty=0,
+                    unit_price=_to_num(r.get("Rate")),
+                    category=str(r.get("Item Category") or "General"),
+                )
+            )
+        covered.add(code)
+
+    # Operational rows (demo set / NEW-* requests) not present in master data.
+    for code, s in stock_by_code.items():
+        if code not in covered:
+            items.append(Item(**_clean(s)))
+            covered.add(code)
+
+    items.sort(key=lambda i: (i.id, i.code))
+    return items
 
 
 def list_machines() -> list[Machine]:
@@ -68,22 +177,38 @@ def get_item_by_code(code: str) -> Optional[Item]:
 
 
 def get_item(id_: int) -> Optional[Item]:
-    found = sc.find_row_by_id("items", id_)
-    if not found:
-        return None
-    return Item(**_clean(found[1]))
+    for i in list_items():
+        if i.id == id_:
+            return i
+    return None
 
 
 def update_item_qty(item_id: int, delta: int) -> Item:
     found = sc.find_row_by_id("items", item_id)
-    if not found:
+    item = get_item(item_id)
+    if not item:
         raise ValueError(f"Item {item_id} not found")
-    row_idx, rec = found
-    new_qty = max(0, int(rec.get("qty") or 0) + delta)
-    rec["qty"] = new_qty
-    values = _item_to_row(rec)
-    sc.update_row("items", row_idx, values)
-    return Item(**_clean(rec))
+    if found:
+        row_idx, rec = found
+        new_qty = max(0, int(rec.get("qty") or 0) + delta)
+        rec["qty"] = new_qty
+        values = _item_to_row(rec)
+        sc.update_row("items", row_idx, values)
+        return Item(**_clean(rec))
+    # Master item without an operational row yet - materialize one.
+    row = {
+        "id": item_id,
+        "code": item.code,
+        "name": item.name,
+        "uom": item.uom,
+        "reorder_level": int(item.reorder_level),
+        "qty": max(0, int(item.qty) + delta),
+        "unit_price": float(item.unit_price),
+        "category": item.category,
+        "created_at": _now(),
+    }
+    sc.append_row("items", _item_to_row(row))
+    return Item(**{k: v for k, v in row.items() if k != "created_at"})
 
 
 # ------------------------------------------------------------------
@@ -1165,10 +1290,10 @@ def _user_to_row(rec: dict) -> list:
 # ------------------------------------------------------------------
 def seed_if_empty() -> None:
     """Seed each table independently (per-table, not all-or-nothing)."""
-    print("Seeding Google Sheet: checking for empty tablesâ€¦")
+    print("Seeding Google Sheet: checking for empty tables...")
 
     if not sc.get_all_records("items"):
-        print("  â†’ items: seeding demo catalog")
+        print("  - items: seeding demo catalog")
         demo_items = [
             (1, "PCPWB60132", "PCPWB60132 Bearing", "NOS", 20, 50, 450.0, "Mechanical"),
             (2, "HYD-040", "Hydraulic Oil ISO 68", "Ltr", 30, 120, 280.0, "Consumable"),
@@ -1180,10 +1305,10 @@ def seed_if_empty() -> None:
             sc.append_row("items", list(it) + [_now()])
             sc.next_id("items")  # keep counter in sync
     else:
-        print("  â†’ items: already seeded")
+        print("  - items: already seeded")
 
     if not sc.get_all_records("machines"):
-        print("  â†’ machines: seeding demo machines")
+        print("  - machines: seeding demo machines")
         demo_machines = [
             (1, "CNC-01", "CNC Lathe 01", "Machine shop"),
             (2, "PRESS-02", "Hydraulic Press 02", "Press bay"),
@@ -1193,16 +1318,16 @@ def seed_if_empty() -> None:
             sc.append_row("machines", list(m) + [_now()])
             sc.next_id("machines")
     else:
-        print("  â†’ machines: already seeded")
+        print("  - machines: already seeded")
 
     if not sc.get_all_records("bots"):
-        print("  â†’ bots: seeding demo bot")
+        print("  - bots: seeding demo bot")
         sc.append_row(
             "bots",
             [
                 1,
                 "BOT-TCS-PRPO",
-                "TCS PR â†’ PO Bot",
+                "TCS PR - PO Bot",
                 "Creates Purchase Requisition and converts to PO in TCS",
                 "generic",
                 "active",
@@ -1215,10 +1340,10 @@ def seed_if_empty() -> None:
         )
         sc.next_id("bots")
     else:
-        print("  â†’ bots: already seeded")
+        print("  - bots: already seeded")
 
     if not sc.get_all_records("users"):
-        print("  â†’ users: seeding demo users")
+        print("  - users: seeding demo users")
         demo_users = [
             (1, "sf.sharma", "A. Sharma", "shopfloor", "Production", "shop@123"),
             (2, "st.khan", "R. Khan", "store", "Warehouse", "store@123"),
@@ -1237,7 +1362,7 @@ def seed_if_empty() -> None:
             sc.append_row("users", _user_to_row(rec))
             sc.next_id("users")
     else:
-        print("  â†’ users: already seeded")
+        print("  - users: already seeded")
 
     print("Seed check complete.")
 

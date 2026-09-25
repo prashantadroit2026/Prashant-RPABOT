@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,20 @@ WORKSHEETS = [
     "audit_logs",
     "meta",  # for counters / last_id
 ]
+
+# Read caching. The Google Sheets free tier allows only 300 read
+# requests/minute/user, and a single dashboard load triggers many tab reads
+# (catalog, inventory, machines, refill, slips, users, bots, runs, alerts
+# all fire in parallel). Without caching the API gets hammered and every
+# endpoint starts failing with HTTP 429 -> RetryError[APIError]. We cache
+# each tab for a few seconds and drop the entry after any write so reads
+# never serve stale rows that follow a mutation.
+_READ_TTL_S = 15.0
+_read_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def _invalidate(sheet_name: str) -> None:
+    _read_cache.pop(sheet_name, None)
 
 
 @lru_cache(maxsize=1)
@@ -116,14 +131,30 @@ def ensure_worksheets() -> None:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4))
 def get_all_records(sheet_name: str) -> list[dict[str, Any]]:
+    now = time.monotonic()
+    cached = _read_cache.get(sheet_name)
+    if cached and now - cached[0] < _READ_TTL_S:
+        return cached[1]
     ws = get_spreadsheet().worksheet(sheet_name)
-    return ws.get_all_records()
+    records = ws.get_all_records()
+    _read_cache[sheet_name] = (now, records)
+    return records
+
+
+def has_worksheet(sheet_name: str) -> bool:
+    """True if a worksheet with this title exists (metadata is cached by gspread)."""
+    try:
+        get_spreadsheet().worksheet(sheet_name)
+        return True
+    except gspread.WorksheetNotFound:
+        return False
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4))
 def append_row(sheet_name: str, values: list[Any]) -> None:
     ws = get_spreadsheet().worksheet(sheet_name)
     ws.append_row(values, value_input_option="USER_ENTERED")
+    _invalidate(sheet_name)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4))
@@ -132,6 +163,7 @@ def update_row(sheet_name: str, row_number: int, values: list[Any]) -> None:
     ws = get_spreadsheet().worksheet(sheet_name)
     end_cell = rowcol_to_a1(row_number, len(values))
     ws.update(f"A{row_number}:{end_cell}", [values], value_input_option="USER_ENTERED")
+    _invalidate(sheet_name)
 
 
 def find_row_by_id(sheet_name: str, record_id: int) -> tuple[int, dict[str, Any]] | None:
@@ -148,6 +180,7 @@ def delete_row(sheet_name: str, row_number: int) -> None:
     """row_number is 1-based (header is row 1)."""
     ws = get_spreadsheet().worksheet(sheet_name)
     ws.delete_rows(row_number)
+    _invalidate(sheet_name)
 
 
 def next_id(sheet_name: str) -> int:
