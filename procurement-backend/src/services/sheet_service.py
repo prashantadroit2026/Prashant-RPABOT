@@ -69,6 +69,22 @@ def _to_num(v: Any) -> float:
         return 0.0
 
 
+def _to_int(v: Any) -> int:
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _first(*vals: Any, fallback: Any = "") -> Any:
+    """First non-empty value among candidates (sheet rows often spell the same
+    field differently), else the fallback."""
+    for v in vals:
+        if v is not None and str(v).strip():
+            return v
+    return fallback
+
+
 def _load_item_data() -> list[dict[str, Any]]:
     """Master rows from the 'Item data' tab, deduped by Item Code.
 
@@ -106,6 +122,36 @@ def _load_item_data() -> list[dict[str, Any]]:
     return out
 
 
+def _item_from_row(stock: dict, master: dict | None = None) -> Optional[Item]:
+    """Tolerantly build an Item from a sheet row.
+
+    Returns None instead of raising when the row lacks a usable id/code, so a
+    single partially-filled row in the spreadsheet can't 500 the whole catalog.
+    Master ('Item data') fields take precedence over the operational row.
+    """
+    code = str(stock.get("code") or "").strip()
+    if not code:
+        return None
+    try:
+        item_id = int(stock.get("id") or 0)
+    except (TypeError, ValueError):
+        return None
+    if item_id <= 0:
+        return None
+    m = master or {}
+    return Item(
+        id=item_id,
+        code=code,
+        name=str(_first(m.get("Item Description"), m.get("Item Name"), stock.get("name"), fallback=code)).strip() or code,
+        uom=str(_first(m.get("Base UOM"), stock.get("uom"), fallback="Pcs")),
+        reorder_level=_to_int(_first(m.get("Reorder Level"), stock.get("reorder_level"))),
+        qty=_to_int(_first(m.get("Qty"), m.get("Quantity"), stock.get("qty"))),
+        unit_price=_to_num(_first(m.get("Rate"), m.get("Unit Price"), stock.get("unit_price"))),
+        category=str(_first(m.get("Item Category"), stock.get("category"), fallback="General")),
+        created_at=stock.get("created_at"),
+    )
+
+
 def list_items() -> list[Item]:
     """Merge master 'Item data' with operational 'items' rows by code."""
     stock = sc.get_all_records("items")
@@ -119,41 +165,23 @@ def list_items() -> list[Item]:
     covered: set[str] = set()
     for r in _load_item_data():
         code = str(r.get("Item Code") or "").strip()
-        desc = str(r.get("Item Description") or "").strip() or code
+        if not code:
+            continue
         s = stock_by_code.get(code)
         if s:
-            items.append(
-                Item(
-                    id=int(s["id"]),
-                    code=code,
-                    name=desc,
-                    uom=str(r.get("Base UOM") or s.get("uom") or "Pcs"),
-                    reorder_level=int(s.get("reorder_level") or 0),
-                    qty=int(s.get("qty") or 0),
-                    unit_price=_to_num(r.get("Rate")) or _to_num(s.get("unit_price")),
-                    category=str(r.get("Item Category") or s.get("category") or "General"),
-                    created_at=s.get("created_at"),
-                )
-            )
+            item = _item_from_row(s, r)
         else:
-            items.append(
-                Item(
-                    id=_stable_item_id(code),
-                    code=code,
-                    name=desc,
-                    uom=str(r.get("Base UOM") or "Pcs"),
-                    reorder_level=0,
-                    qty=0,
-                    unit_price=_to_num(r.get("Rate")),
-                    category=str(r.get("Item Category") or "General"),
-                )
-            )
+            item = _item_from_row({"id": _stable_item_id(code), "code": code}, r)
+        if item:
+            items.append(item)
         covered.add(code)
 
     # Operational rows (demo set / NEW-* requests) not present in master data.
     for code, s in stock_by_code.items():
         if code not in covered:
-            items.append(Item(**_clean(s)))
+            item = _item_from_row(s)
+            if item:
+                items.append(item)
             covered.add(code)
 
     items.sort(key=lambda i: (i.id, i.code))
